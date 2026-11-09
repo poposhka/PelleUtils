@@ -1,5 +1,4 @@
 from pathlib import Path
-import random
 
 try:
     import lupa
@@ -18,17 +17,20 @@ def build_lua_runtime():
 
     lua.execute(
         r'''
-        -- Mock API functions used by Core.lua
-        
+        mockFrames = {}
+        mockTargetExists = false
+        mockTargetIsPlayer = false
+        mockTargetName = "Mira"
+        mockTargetRace = "Human"
+        mockTargetSex = 2
+
         function UnitName(unit)
-            names = {"Borin", "Aeliana", "Tarek", "Mira", "Thorn", "Lysa", "Gorath", "Elandra", "Kael", "Sylvara"}
-            realms = {"Stormwind", "Ironforge", "Darnassus", "Orgrimmar", "Undercity", "Thunder Bluff", "Silvermoon", "Exodar"}
-            rindex = math.random(1, #realms)
-            index = math.random(1, #names)
-            return names[index], realms[rindex]
+            if unit == "target" then
+                return mockTargetName, "Stormwind"
+            end
+            return "Borin", "Stormwind"
         end
 
-        -- Mock WoW globals used by Core.lua
         DEFAULT_CHAT_FRAME = {
             AddMessage = function(self, msg)
                 print(msg)
@@ -45,13 +47,20 @@ def build_lua_runtime():
         SlashCmdList = {}
 
         function CreateFrame(frameType, name, parent, template)
-            local frame = {}
+            local frame = { scripts = {} }
             function frame:RegisterEvent(eventName)
-                return true
+                self.event = eventName
             end
             function frame:SetScript(scriptName, callback)
-                return true
+                self.scripts[scriptName] = callback
             end
+            function frame:FireEvent(eventName)
+                local callback = self.scripts.OnEvent
+                if callback and eventName == self.event then
+                    callback(self, eventName)
+                end
+            end
+            table.insert(mockFrames, frame)
             return frame
         end
 
@@ -60,43 +69,42 @@ def build_lua_runtime():
         end
 
         function UnitExists(unit)
-            if unit == "target" or unit == "player" then
-                return math.random() < 0.5
+            if unit == "target" then
+                return mockTargetExists
+            elseif unit == "player" then
+                return true
             end
             return false
         end
 
         function UnitIsUnit(unitA, unitB)
-            return unitA == "target" and unitB == "player"
+            return unitA == "target" and unitB == "player" and mockTargetIsPlayer
         end
 
         function UnitRace(unit)
             if unit == "target" then
-                local races = {"Human", "Dwarf", "Night Elf", "Gnome", "Blood Elf", "Orc", "Undead", "Tauren"}
-                local idx = math.random(1, #races)
-                return races[idx], "dummy\filename", 123
+                return mockTargetRace, "Human", 123
             end
             return "Human"
         end
 
         function UnitSex(unit)
             if unit == "target" then
-                return math.random(1, 3)
+                return mockTargetSex
             end
             return 2
         end
 
-        -- Make the random roll deterministic enough for simple testing.
-        local pyRandom = math.random
+        -- Keep the demo deterministic while respecting Lua's math.random ranges.
         math.random = function(...)
             local args = {...}
             if #args == 0 then
                 return 0.8
             end
             if #args == 1 then
-                return math.floor(args[1])
+                return 1
             end
-            return args[1] + (args[2] - args[1]) * pyRandom()
+            return args[1]
         end
         '''
     )
@@ -111,20 +119,25 @@ def load_core(lua):
         local addonName = "PelleUtils"
         local addon = {{}}
         chunk(addonName, addon)
+        for _, frame in ipairs(mockFrames) do
+            frame:FireEvent("PLAYER_LOGIN")
+        end
         '''
     )
 
 
 def demonstrate_self_blessing(lua, count=5):
-    
     print("\n=== self blessing demo ===")
+    lua.globals().mockTargetExists = True
+    lua.globals().mockTargetIsPlayer = True
     for _ in range(count):
         lua.globals().randomBlessing()
 
 
 def demonstrate_target_blessing(lua, count=5):
-    
     print("\n=== target blessing demo ===")
+    lua.globals().mockTargetExists = True
+    lua.globals().mockTargetIsPlayer = False
     for _ in range(count):
         lua.globals().randomBlessing()
 

@@ -276,6 +276,7 @@ local function BuildTargetBlessing(target)
     })
 
     local classFragment = RandomChoice(addon.ClassBlessingFragments)
+    local quip
     if classFragment and classFragment ~= "" then
         quip = classFragment
     else
@@ -290,7 +291,7 @@ local function BuildTargetBlessing(target)
         gender = "friend"
     end
 
-    return string.format("%s %s %s %s.%s", intro, name, strength, gender, quip)
+    return string.format("%s %s, my %s, %s, %s %s", intro, name, gender, descriptor, blessing, quip)
 end
 
 function randomBlessing()
