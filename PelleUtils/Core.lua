@@ -4,6 +4,7 @@ addon.Name = addonName
 addon.Version = "0.1.0"
 addon.Defaults = {
     enabled = true,
+    bless_triggerchance = 0.5,
     message = "PelleUtils ready.",
     color = "|cff00ccff",
     showHelp = true,
@@ -91,6 +92,7 @@ frame:SetScript("OnEvent", function(self, event)
     addon.db = MergeDefaults(addon.Defaults, PelleUtilsDB)
     addon.db.message = addon.db.message or addon.Defaults.message
     addon.db.enabled = addon.db.enabled ~= false
+    addon.db.bless_triggerchance = addon.db.bless_triggerchance or addon.Defaults.bless_triggerchance
     addon.db.color = addon.db.color or addon.Defaults.color
     addon.db.showHelp = addon.db.showHelp ~= false
     PelleUtilsDB = addon.db
@@ -242,17 +244,70 @@ local function BuildSelfBlessing()
     return string.format("%s %s %s %s", opening, action, closure, dwarfQuip)
 end
 
+local function isParen(text)
+    return string.match(text, "^%(.+%)$")
+end
+
+
+local function isBracket(text)
+    if string.match(text, "^%{.+%}$") then
+        return true
+    end
+end
+
+local function capitalize(str)
+    if str == nil or str == "" then return "" end
+    return string.upper(string.sub(str, 1, 1)) .. string.sub(str, 2)
+end
+
+local function handleFragment(fragment)
+    if isParen(fragment) then
+        fragment = string.gsub(fragment, "[%()]", "")
+        if math.random() < 0.5 then
+            return handleFragment(fragment)
+        end
+    elseif isBracket(fragment) then
+        return "zzaa"
+    else
+        return fragment
+    end
+end
+
 local function BuildTargetBlessing(target)
     local race = target.race or "unknown"
     local gender = target.gender or "person"
     local name = target.name or "friend"
 
+    -- (text) 50% chance to occur
+    -- {sibling} sister/brother/""
+    -- {name} name of target
+    -- {race} race of target
+    -- | in {race|name} will pick one 50/50
+
     local intro = RandomChoice({
-        "May the Light guide",
+        "(May the )Light guide you {sibling} ){name_race}",
         "By the Light, bless",
         "The Light watches over",
         "Let the Light strengthen",
     })
+
+    template = {
+        "(may the)",
+        "light guide you",
+        "({sibling})"
+    }
+
+    result = {}
+    for index, fragment in ipairs(template) do
+        fragment = handleFragment(fragment)
+        if fragment ~= "" then
+            table.insert(result, fragment)
+        end
+    end
+
+    result = table.concat(result, " ") .. "."
+
+    if true then return capitalize(result) end
 
     local descriptor = RandomChoice({
         "the steadfast " .. race,
@@ -299,7 +354,7 @@ function randomBlessing()
         return
     end
 
-    if math.random() <= 0.5 then
+    if math.random() > addon.db.bless_triggerchance then
         return
     end
 

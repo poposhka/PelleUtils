@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 from pathlib import Path
 
 try:
@@ -12,104 +13,27 @@ ROOT = Path(__file__).resolve().parent
 CORE_PATH = ROOT / "Core.lua"
 
 
-def build_lua_runtime():
-    lua = lupa.LuaRuntime(unpack_returned_tuples=True)
+class LuaFixture:
+    def __init__(self) -> None:
+        self.lua = lupa.LuaRuntime(unpack_returned_tuples=True)
+        self.lua.execute(open("lua_fixture.lua").read())
+        load_core(self.lua)
+    mock_UnitName_TargetName = "Mira"
+    mock_UnitName_TargetZone = "Stormwind"
+    mock_UnitExists_target = True
+    mock_UnitIsUnit_target_is_player = True
+    mock_UnitRace_racename = "Human"
+    mock_UnitSex_target = 2 # 1: Unknown, 2: Man, 3: Woman
+    def configureLua(self):
+        self.lua.globals().mock_UnitName_TargetName = LuaFixture.mock_UnitName_TargetName
+        self.lua.globals().mock_UnitName_TargetZone = LuaFixture.mock_UnitName_TargetZone
+        self.lua.globals().mock_UnitExists_target = LuaFixture.mock_UnitExists_target
+        self.lua.globals().mock_UnitIsUnit_target_is_player = LuaFixture.mock_UnitIsUnit_target_is_player
+        self.lua.globals().mock_UnitRace_racename = LuaFixture.mock_UnitRace_racename
+        self.lua.globals().mock_UnitSex_target = LuaFixture.mock_UnitSex_target
 
-    lua.execute(
-        r'''
-        mockFrames = {}
-        mockTargetExists = false
-        mockTargetIsPlayer = false
-        mockTargetName = "Mira"
-        mockTargetRace = "Human"
-        mockTargetSex = 2
-
-        function UnitName(unit)
-            if unit == "target" then
-                return mockTargetName, "Stormwind"
-            end
-            return "Borin", "Stormwind"
-        end
-
-        DEFAULT_CHAT_FRAME = {
-            AddMessage = function(self, msg)
-                print(msg)
-            end,
-        }
-
-        PelleUtilsDB = {
-            enabled = true,
-            message = "PelleUtils ready.",
-            color = "|cff00ccff",
-            showHelp = true,
-        }
-
-        SlashCmdList = {}
-
-        function CreateFrame(frameType, name, parent, template)
-            local frame = { scripts = {} }
-            function frame:RegisterEvent(eventName)
-                self.event = eventName
-            end
-            function frame:SetScript(scriptName, callback)
-                self.scripts[scriptName] = callback
-            end
-            function frame:FireEvent(eventName)
-                local callback = self.scripts.OnEvent
-                if callback and eventName == self.event then
-                    callback(self, eventName)
-                end
-            end
-            table.insert(mockFrames, frame)
-            return frame
-        end
-
-        function SendChatMessage(message, channel)
-            print("[SAY] " .. tostring(message))
-        end
-
-        function UnitExists(unit)
-            if unit == "target" then
-                return mockTargetExists
-            elseif unit == "player" then
-                return true
-            end
-            return false
-        end
-
-        function UnitIsUnit(unitA, unitB)
-            return unitA == "target" and unitB == "player" and mockTargetIsPlayer
-        end
-
-        function UnitRace(unit)
-            if unit == "target" then
-                return mockTargetRace, "Human", 123
-            end
-            return "Human"
-        end
-
-        function UnitSex(unit)
-            if unit == "target" then
-                return mockTargetSex
-            end
-            return 2
-        end
-
-        -- Keep the demo deterministic while respecting Lua's math.random ranges.
-        math.random = function(...)
-            local args = {...}
-            if #args == 0 then
-                return 0.8
-            end
-            if #args == 1 then
-                return 1
-            end
-            return args[1]
-        end
-        '''
-    )
-    return lua
-
+    def randomBlessing(self):
+        self.lua.globals().randomBlessing()
 
 def load_core(lua):
     code_path = str(CORE_PATH).replace('\\', '\\\\')
@@ -143,12 +67,20 @@ def demonstrate_target_blessing(lua, count=5):
 
 
 def main():
-    lua = build_lua_runtime()
-    load_core(lua)
+    lua = LuaFixture()
+    
 
     # This prints a few example calls so you can see how the Lua function behaves.
-    demonstrate_self_blessing(lua, count=3)
-    demonstrate_target_blessing(lua, count=3)
+    # demonstrate_self_blessing(lua, count=3)
+    # demonstrate_target_blessing(lua, count=3)
+
+    lua.mock_UnitExists_target = True
+    lua.mock_UnitIsUnit_target_is_player = True
+    lua.mock_UnitRace_racename = "Human"
+    lua.configureLua()
+
+    lua.randomBlessing()
+    
 
 
 if __name__ == "__main__":
