@@ -1,0 +1,10 @@
+## Interface: 110000
+## Title: Generic Addon
+## Notes: A lightweight generic addon template for World of Warcraft Forever.
+## Author: GitHub Copilot
+## Version: 0.1.0
+## SavedVariablesPerCharacter: GenericAddonDB
+## DefaultState: enabled
+
+Core.lua
+Config.lua

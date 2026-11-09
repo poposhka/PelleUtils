@@ -1,0 +1,10 @@
+## Interface: 110000
+## Title: PelleUtils
+## Notes: A lightweight utility addon for World of Warcraft Forever.
+## Author: GitHub Copilot
+## Version: 0.1.0
+## SavedVariablesPerCharacter: PelleUtilsDB
+## DefaultState: enabled
+
+Core.lua
+Config.lua
