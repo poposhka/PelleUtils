@@ -35,7 +35,13 @@ class LuaFixture:
         self.lua.globals().mock_UnitClass_target = LuaFixture.mock_UnitClass_target
 
     def randomBlessing(self):
-        self.lua.globals().randomBlessing()
+        #self.lua.globals().randomBlessing()
+        self.lua.execute(
+            f'''
+            for _, frame in ipairs(mockFrames) do
+                frame:FireEvent("COMBAT_LOG_EVENT_UNFILTERED")
+            end
+            ''')
 
 def load_core(lua):
     code_path = str(CORE_PATH).replace('\\', '\\\\')

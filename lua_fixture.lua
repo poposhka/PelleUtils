@@ -66,6 +66,10 @@ function UnitGUID(unit)
     return nil
 end
 
+function UnitTokenFromGUID(guid)
+    return "target"
+end
+
 function CombatLogGetCurrentEventInfo()
     -- timestamp, subEvent, hideCaster, sourceGUID, sourceName, sourceFlags, sourceRaidFlags, destGUID, destName, destFlags, destRaidFlags, spellID, spellName, spellSchool
     return 1234, "SPELL_CAST_SUCCESS", "hideCaster", "_player_guid_", "Player One", "sourceFlags", "sourceRaidFlags",
@@ -132,3 +136,11 @@ end
 --     end
 --     return args[1]
 -- end
+
+C_Spell = {
+    GetSpellInfo = function(spellID)
+        return {
+            name = "Blessing of Protection"
+        }
+    end
+}

@@ -9,7 +9,7 @@ addon.Defaults = {
     color = "|cff00ccff",
     showHelp = true,
 }
-
+addon.current_target = "target"
 
 local function split(text, separator)
     local parts = {}
@@ -97,11 +97,9 @@ end
 
 local frame = CreateFrame("Frame")
 frame:RegisterEvent("PLAYER_LOGIN")
---frame:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
+frame:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
 
 frame:SetScript("OnEvent", function(self, event)
-    
-
     print(self)
     if event == "PLAYER_LOGIN" then
 
@@ -130,9 +128,8 @@ frame:SetScript("OnEvent", function(self, event)
                 local spellName = spellInfo and spellInfo.name
 
                 -- Replace "Power Infusion" with whatever boon/blessing spell you track
-                if spellName == "Power Infusion" or spellName == "Blessing of Protection" then
-
-                    randomBlessing()
+                if string.find(spellName, "Blessing of") == 1 then
+                    randomBlessing(UnitTokenFromGUID(destGUID))
                 end
             end
         end -- subEvent == "SPELL_CAST_SUCCESS"
@@ -233,26 +230,6 @@ local function RandomChoice(list)
     return weightedChoices[#weightedChoices].value
 end
 
-local function GetTargetProfile()
-    if not UnitExists("target") then
-        return nil
-    end
-
-    local race = UnitRace("target") or "unknown"
-    local gender = "person"
-    if UnitSex("target") == 2 then
-        gender = "woman"
-    elseif UnitSex("target") == 3 then
-        gender = "man"
-    end
-
-    return {
-        race = race,
-        gender = gender,
-        name = UnitName("target") or "friend",
-    }
-end
-
 local function BuildSelfBlessing()
     local opening = RandomChoice({
         "By the Light,",
@@ -308,7 +285,7 @@ end
 
 local function handleVariable(variable)
     if variable == "sibling" then
-        local gender = UnitSex("target")
+        local gender = UnitSex(addon.current_target)
         if gender == 2 then
             return "sister"
         elseif gender == 3 then
@@ -317,7 +294,7 @@ local function handleVariable(variable)
             return "friend"
         end
     elseif variable == "3p_pronoun" then
-        local gender = UnitSex("target")
+        local gender = UnitSex(addon.current_target)
         if gender == 2 then
             return "her"
         elseif gender == 3 then
@@ -326,7 +303,7 @@ local function handleVariable(variable)
             return "them"
         end
     elseif variable == "3p_pronoun_poss" then
-        local gender = UnitSex("target")
+        local gender = UnitSex(addon.current_target)
         if gender == 2 then
             return "hers"
         elseif gender == 3 then
@@ -337,13 +314,13 @@ local function handleVariable(variable)
     elseif variable == "possessive_adjective" then
         return "(your|thine)"
     elseif variable == "name" then
-        return UnitName("target") or "friend"
+        return UnitName(addon.current_target) or "friend"
     elseif variable == "race" then
-        return UnitRace("target") or "stranger"
+        return UnitRace(addon.current_target) or "stranger"
     elseif variable == "protection_active" then
         return "(guide|bless|protect|guard|shield|watch over)"
     elseif variable == "class" then
-        return UnitClass("target") or "Hero"
+        return UnitClass(addon.current_target) or "Hero"
     elseif variable == "title" then
         return "(({sibling} |){name}|{race}|{class})"
     elseif variable == "light" then
@@ -351,7 +328,7 @@ local function handleVariable(variable)
     elseif variable == "blessing" then
         return "(boon|blessing|benediction|grace|gift|favor|grace|mercy)"
     elseif variable == "class_asset" then
-        local class = (UnitClass("target") or "Hero"):lower()
+        local class = (UnitClass(addon.current_target) or "Hero"):lower()
         local switch = {
             ["warrior"] = "(arm|fist|blade)",
             ["priest"] = "soul",
@@ -365,7 +342,7 @@ local function handleVariable(variable)
         }
         return switch[class] or "body"
     elseif variable == "class_attribute" then
-        local class = (UnitClass("target") or "Hero"):lower()
+        local class = (UnitClass(addon.current_target) or "Hero"):lower()
         local switch = {
             ["warrior"] = "(true|courageous|brave|strong|fierce|unyielding|honorable)",
             ["priest"] = "(true|faithful|with the light)",
@@ -379,7 +356,7 @@ local function handleVariable(variable)
         }
         return switch[class] or "true"
     elseif variable == "class_weapon" then
-        local class = (UnitClass("target") or "Hero"):lower()
+        local class = (UnitClass(addon.current_target) or "Hero"):lower()
         local switch = {
             ["warrior"] = "(axe|sword|hammer)",
             ["priest"] = "(faith|healing|heart)",
@@ -437,19 +414,7 @@ local function handleFragment(fragment, start, endchar)
     return result, endindex
 end
 
-local function BuildTargetBlessing(target)
-    local race = target.race or "unknown"
-    local gender = target.gender or "person"
-    local name = target.name or "friend"
-
-    -- (text) 50% chance to occur
-    -- {sibling} sister/brother/""
-    -- {name} name of target
-    -- {race} race of target
-    -- | in {race|name} will pick one 50/50
-    local phrases = {}
-    -- may the Light guide you Human
-    --table.insert(phrases, "(may the |eternal |Glory of |)light {protection_active} you(, {sibling}|, {race}|, {name}|).")
+local function BuildTargetBlessing()
 
 
     local result = ""
@@ -510,7 +475,7 @@ local function BuildTargetBlessing(target)
     return result
 end
 
-function randomBlessing()
+function randomBlessing(unit)
     if addon.db and addon.db.enabled == false then
         return
     end
@@ -519,16 +484,14 @@ function randomBlessing()
         return
     end
 
-    local target = GetTargetProfile()
+    addon.current_target = unit
 
-    if UnitIsUnit("target", "player") then
+    if UnitIsUnit(unit, "player") then
         local sentence = BuildSelfBlessing()
         SendChatMessage(sentence, "SAY")
         return
-    end
-
-    if target then
-        local sentence = BuildTargetBlessing(target)
+    else
+        local sentence = BuildTargetBlessing()
         SendChatMessage(sentence, "SAY")
     end
 end
