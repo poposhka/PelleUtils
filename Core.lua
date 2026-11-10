@@ -83,7 +83,7 @@ local function HandleSlashCommand(msg)
     end
 
     if command == "blessing" then
-        randomBlessing()
+        randomBlessing("target")
         return
     end
 
@@ -100,7 +100,7 @@ frame:RegisterEvent("PLAYER_LOGIN")
 frame:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
 
 frame:SetScript("OnEvent", function(self, event)
-    print(self)
+    Print(event)
     if event == "PLAYER_LOGIN" then
 
         PelleUtilsDB = PelleUtilsDB or {}
@@ -119,7 +119,7 @@ frame:SetScript("OnEvent", function(self, event)
     elseif event == "COMBAT_LOG_EVENT_UNFILTERED" then
         local _, subEvent, _, sourceGUID, sourceName, _, _, destGUID, destName, _, _, spellID = CombatLogGetCurrentEventInfo()
         if subEvent == "SPELL_CAST_SUCCESS" then
-
+            Print("SPELL_CAST_SUCCESS")
             -- Filter: Ensure the player is the one who cast it, AND it wasn't cast on themselves
             if sourceGUID == UnitGUID("player") and destGUID ~= UnitGUID("player") then
 
