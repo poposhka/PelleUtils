@@ -10,6 +10,20 @@ addon.Defaults = {
     showHelp = true,
 }
 
+
+local function split(text, separator)
+    local parts = {}
+    -- Escape punctuation characters to treat them as literal characters
+    local pattern = "(.-)" .. separator:gsub("%p", "%%%0")
+    
+    -- Append the separator to guarantee the trailing empty string is caught
+    for part in (text .. separator):gmatch(pattern) do
+        table.insert(parts, part)
+    end
+    return parts
+end
+
+
 local function Trim(value)
     if value == nil then
         return ""
@@ -124,6 +138,12 @@ function RegisterClassBlessingFragments(fragments)
 end
 -- 
 local function RandomChoice(list)
+
+    if type(list) == "string" then
+        local options = split(list, "|")
+        return options[math.random(1, #options)]
+    end
+
     if type(list) ~= "table" or #list == 0 then
         return ""
     end
@@ -155,7 +175,7 @@ local function RandomChoice(list)
             end
         end
 
-        if type(value) == "string" and value ~= "" then
+        if type(value) == "string" then
             weight = tonumber(weight) or 1
             if weight <= 0 then
                 weight = 1
@@ -260,17 +280,57 @@ local function capitalize(str)
     return string.upper(string.sub(str, 1, 1)) .. string.sub(str, 2)
 end
 
-local function handleFragment(fragment)
-    if isParen(fragment) then
-        fragment = string.gsub(fragment, "[%()]", "")
-        if math.random() < 0.5 then
-            return handleFragment(fragment)
+local function handleVariable(variable)
+    if variable == "sibling" then
+        local gender = UnitSex("target")
+        if gender == 2 then
+            return "sister"
+        elseif gender == 3 then
+            return "brother"
+        else
+            return "friend"
         end
-    elseif isBracket(fragment) then
-        return "zzaa"
+    elseif variable == "name" then
+        return UnitName("target") or "friend"
+    elseif variable == "race" then
+        return UnitRace("target") or "stranger"
+    elseif variable == "protection" then
+        return "guide|bless|protect|guard|shield|watch over"
     else
-        return fragment
+        return variable
     end
+end
+
+local function handleFragment(fragment, start, endchar)
+    start = start or 1
+    endchar = endchar or nil
+    endindex = #fragment
+    local result = ""
+    local i = start
+    while i <= #fragment do
+        local char = string.sub(fragment, i, i)
+        if char == "(" then
+            local innerfragment, endfrag = handleFragment(fragment, i + 1, ")")
+            local options = split(innerfragment, "|")
+            local choice = RandomChoice(options)
+            result = result .. choice
+            i = endfrag
+        elseif char == "{" then
+            local options, endfrag = handleFragment(fragment, i + 1, "}")
+            local choice = RandomChoice(options)
+            options = handleVariable(choice)
+            choice = RandomChoice(options)
+            result = result .. choice
+            i = endfrag
+        elseif char == endchar then
+            endindex = i
+            break
+        else
+            result = result .. char
+        end
+        i = i + 1
+    end
+    return result, endindex
 end
 
 local function BuildTargetBlessing(target)
@@ -284,28 +344,11 @@ local function BuildTargetBlessing(target)
     -- {race} race of target
     -- | in {race|name} will pick one 50/50
 
-    local intro = RandomChoice({
-        "(May the )Light guide you {sibling} ){name_race}",
-        "By the Light, bless",
-        "The Light watches over",
-        "Let the Light strengthen",
-    })
+    -- may the Light guide you Human
+    a = "(may the |eternal |Glory of |)light {protection} you(, {sibling}|, {race}|, {name}|)."
+    a = "(blessed |holy |sacred |eternal |)light, {protection} (this {race}|our {sibling} {name})(, and guide their hand in battle|)."
+    result = handleFragment(a)
 
-    template = {
-        "(may the)",
-        "light guide you",
-        "({sibling})"
-    }
-
-    result = {}
-    for index, fragment in ipairs(template) do
-        fragment = handleFragment(fragment)
-        if fragment ~= "" then
-            table.insert(result, fragment)
-        end
-    end
-
-    result = table.concat(result, " ") .. "."
 
     if true then return capitalize(result) end
 
