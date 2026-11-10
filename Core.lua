@@ -10,6 +10,7 @@ addon.Defaults = {
     showHelp = true,
 }
 addon.current_target = "target"
+addon.spell_queue = {}
 
 local function split(text, separator)
     local parts = {}
@@ -97,9 +98,38 @@ end
 
 local frame = CreateFrame("Frame")
 frame:RegisterEvent("PLAYER_LOGIN")
-frame:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
+frame:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
+frame:RegisterUnitEvent("UNIT_SPELLCAST_SENT", "player")
 
-frame:SetScript("OnEvent", function(self, event)
+
+local function handle_UNIT_SPELLCAST_SUCCEEDED(...)
+
+    local unitTarget, castGUID, spellID, castBarID = ...
+    if unitTarget ~= "player" then
+        return
+    end
+
+    local spell_item = addon.spell_queue[castGUID]
+    if spell_item == nil then
+        return
+    end
+
+    -- clear it
+    addon.spell_queue[castGUID] = nil
+
+    -- Filter: Verify the spell cast is your specific buff/boon
+    local spellInfo = C_Spell.GetSpellInfo(spellID)
+    local spellName = spellInfo and spellInfo.name
+
+    -- Replace "Power Infusion" with whatever boon/blessing spell you track
+    if string.find(spellName, "Blessing of") == 1 then
+        addon.current_target = spell_item.target
+        randomBlessing(UnitTokenFromGUID(destGUID))
+    end
+
+end
+
+frame:SetScript("OnEvent", function(self, event, ...)
     Print(event)
     if event == "PLAYER_LOGIN" then
 
@@ -116,24 +146,29 @@ frame:SetScript("OnEvent", function(self, event)
         Print(addon.db.message)
 
     -- Filter: Only run if a spell successfully finished casting
-    elseif event == "COMBAT_LOG_EVENT_UNFILTERED" then
-        local _, subEvent, _, sourceGUID, sourceName, _, _, destGUID, destName, _, _, spellID = CombatLogGetCurrentEventInfo()
-        if subEvent == "SPELL_CAST_SUCCESS" then
-            Print("SPELL_CAST_SUCCESS")
-            -- Filter: Ensure the player is the one who cast it, AND it wasn't cast on themselves
-            if sourceGUID == UnitGUID("player") and destGUID ~= UnitGUID("player") then
+    elseif event == "UNIT_SPELLCAST_SENT" and unit == "player" then
 
-                -- Filter: Verify the spell cast is your specific buff/boon
-                local spellInfo = C_Spell.GetSpellInfo(spellID)
-                local spellName = spellInfo and spellInfo.name
+        -- Arguments: target, castGUID, spellID
+        local unitTarget, target, castGUID, spellID = ...
 
-                -- Replace "Power Infusion" with whatever boon/blessing spell you track
-                if string.find(spellName, "Blessing of") == 1 then
-                    randomBlessing(UnitTokenFromGUID(destGUID))
-                end
-            end
-        end -- subEvent == "SPELL_CAST_SUCCESS"
-    end -- event COMBAT_LOG_EVENT_UNFILTERED
+        -- BIG TODO: Investigate what these parameters actually are
+        -- can we determine the target and/or target's GUID from these parameters
+        -- with e.g. UnitGUID(target_token) then store that for _SUCCEEDED.
+        -- and/or can we save off target info NOW so that if it succeeds, we can reference that
+        -- in our creation of strings
+
+        if unitTarget == "player" then
+            -- Store the target's name
+            addon.spell_queue[castGUID] = {
+                timestamp = GetTime(),
+                targetGUID = target,
+                spell = spellID
+            }
+        end
+
+    elseif event == "UNIT_SPELLCAST_SUCCEEDED" then
+        handle_UNIT_SPELLCAST_SUCCEEDED(...)
+    end
 end)
 
 
