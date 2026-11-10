@@ -24,6 +24,7 @@ class LuaFixture:
     mock_UnitIsUnit_target_is_player = True
     mock_UnitRace_racename = "Human"
     mock_UnitSex_target = 2 # 1: Unknown, 2: Man, 3: Woman
+    mock_UnitClass_target = "Paladin"
     def configureLua(self):
         self.lua.globals().mock_UnitName_TargetName = LuaFixture.mock_UnitName_TargetName
         self.lua.globals().mock_UnitName_TargetZone = LuaFixture.mock_UnitName_TargetZone
@@ -31,6 +32,7 @@ class LuaFixture:
         self.lua.globals().mock_UnitIsUnit_target_is_player = LuaFixture.mock_UnitIsUnit_target_is_player
         self.lua.globals().mock_UnitRace_racename = LuaFixture.mock_UnitRace_racename
         self.lua.globals().mock_UnitSex_target = LuaFixture.mock_UnitSex_target
+        self.lua.globals().mock_UnitClass_target = LuaFixture.mock_UnitClass_target
 
     def randomBlessing(self):
         self.lua.globals().randomBlessing()

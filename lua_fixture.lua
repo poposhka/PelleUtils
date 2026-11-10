@@ -5,6 +5,7 @@ mock_UnitExists_target = true
 mock_UnitIsUnit_target_is_player = true
 mock_UnitRace_racename = "Human"
 mock_UnitSex_target = 2 -- 1: Unknown, 2: Man, 3: Woman
+mock_UnitClass_target = "Warrior"
 
 
 -- Mocked WOW API chat frame
@@ -34,21 +35,41 @@ end
 
 -- Mocked WOW API function to create a frame
 function CreateFrame(frameType, name, parent, template)
-    local frame = { scripts = {} }
+    local frame = {
+        scripts = {},
+        event = "",
+        callback = nil
+    }
+
     function frame:RegisterEvent(eventName)
-        self.event = eventName
+        self.event = self.event .. "|" .. eventName .. "|"
     end
+
     function frame:SetScript(scriptName, callback)
         self.scripts[scriptName] = callback
     end
+
     function frame:FireEvent(eventName)
         local callback = self.scripts.OnEvent
-        if callback and eventName == self.event then
+        if callback and string.find(self.event, "|" .. eventName .. "|") then
             callback(self, eventName)
         end
     end
     table.insert(mockFrames, frame)
     return frame
+end
+
+function UnitGUID(unit)
+    if unit == "player" then
+        return "_player_guid_"
+    end
+    return nil
+end
+
+function CombatLogGetCurrentEventInfo()
+    -- timestamp, subEvent, hideCaster, sourceGUID, sourceName, sourceFlags, sourceRaidFlags, destGUID, destName, destFlags, destRaidFlags, spellID, spellName, spellSchool
+    return 1234, "SPELL_CAST_SUCCESS", "hideCaster", "_player_guid_", "Player One", "sourceFlags", "sourceRaidFlags",
+        "_dest_guid_", "John Warrior", "destFlags", "destRaidFlags", "spellID", "spellName", "spellSchool"
 end
 
 -- Mocked WOW API function to send a chat message
@@ -93,7 +114,14 @@ function UnitSex(unit)
     return nil
 end
 
--- -- Keep the demo deterministic while respecting Lua's math.random ranges.
+function UnitClass(unit)
+    if unit == "target" then
+        return mock_UnitClass_target, "fake/filename", 123
+    end
+    return nil
+end
+
+-- Keep the demo deterministic while respecting Lua's math.random ranges.
 -- math.random = function(...)
 --     local args = {...}
 --     if #args == 0 then
