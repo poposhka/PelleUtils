@@ -23,6 +23,10 @@ function GetChatFrameByName(targetName)
     return DEFAULT_CHAT_FRAME
 end
 
+function FileLine(text)
+    return text:match("([^\\/:]+):(%d+):(.*)")
+end
+
 -- Helper to get caller function name
 function FuncName()
     -- Start at stack depth 3 (1 = this function, 2 = current function, 3 = caller)
@@ -30,7 +34,7 @@ function FuncName()
     -- Extract the function name inside single quotes: in function 'FunctionName'
     local file, line, func = stack:match("([^\\/:]+):(%d+): in function '([^']+)'")
     if not line then
-        file, line = stack:match("([^\\/:]+):(%d+):")
+        file, line = FileLine(stack)
         func = "anonymous"
     end
     return file..":"..line..":"..func
@@ -38,6 +42,7 @@ end
 
 -- Helper function to split a string
 function split(text, separator)
+    separator = separator or " "
     local parts = {}
     -- Escape punctuation characters to treat them as literal characters
     local pattern = "(.-)" .. separator:gsub("%p", "%%%0")

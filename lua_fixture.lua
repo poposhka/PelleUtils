@@ -55,7 +55,7 @@ DEFAULT_CHAT_FRAME = {
     name = "CHAT"
 }
 
--- Mocked SavedVariable
+-- Mocked SavedVariable with triggerchance at 1.0
 PelleUtilsDB = {
     enabled = true,
     bless_triggerchance = 1.0,
@@ -121,8 +121,8 @@ function debugstack(start, count1, count2)
         local func_desc
         if info.name and info.name ~= "" then
             func_desc = string.format("in function '%s'", info.name)
-        elseif info.what == "main" then
-            func_desc = "in main chunk"
+        elseif info.what and info.what ~= "" then
+            func_desc = "in <" .. info.what .. "> chunk"
         elseif info.linedefined and info.linedefined > 0 then
             func_desc = string.format("in function <%s:%d>", info.short_src, info.linedefined)
         else
@@ -130,6 +130,8 @@ function debugstack(start, count1, count2)
         end
 
         local frame_text = string.format("%s: %s", location, func_desc)
+        -- print("*** " .. frame_text)
+        -- print("*** " .. tostring(info.name) .. ", " .. tostring(info.what) .. ", " .. tostring(info.linedefined) )
         frames[#frames + 1] = frame_text
         level = level + 1
     end
@@ -152,6 +154,10 @@ function debugstack(start, count1, count2)
     for i = total - count2 + 1, total do
         out[#out + 1] = frames[i]
     end
+
+    -- for k,v in ipairs(out) do
+    --     print(">>> " .. v)
+    -- end
 
     return table.concat(out, "\n") .. "\n"
 end

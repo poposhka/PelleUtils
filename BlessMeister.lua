@@ -37,18 +37,22 @@ function BlessMeisterAddon:init(addonName)
     self.frame:RegisterEvent("PLAYER_LOGIN")
     self.frame:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
     self.frame:RegisterUnitEvent("UNIT_SPELLCAST_SENT", "player")
-    self.frame:SetScript("OnEvent", function(frame, ...) self:SafeOnEvent(...) end)
+    self.frame:SetScript("OnEvent", function(frame, ...)
+        xpcall(function(...) self:OnEvent(...) end, self.Catch, ...)
+    end)
 end
 
-function BlessMeisterAddon:SafeOnEvent(...)
-    local ok, result = xpcall(self.OnEvent, function(err)
-        return err .. ":\n" .. debugstack(2)
-    end,
-    self, ...)
-
-    if not ok then
-        self:error(result)
+-- STATIC function
+function BlessMeisterAddon.Catch(err)
+    file, line, rest = FileLine(err)
+    if file and line and rest then
+        err = "[" .. file .. ":" .. line .. "]:" .. rest
     end
+    err = err .. ":\n" .. debugstack(2)
+
+    local frame = GetChatFrameByName("error")
+    frame:AddMessage(err)
+    return err
 end
 
 function BlessMeisterAddon:OnEvent(event, ...)
@@ -69,6 +73,7 @@ function BlessMeisterAddon:OnEvent(event, ...)
 end
 
 function BlessMeisterAddon:OnPlayerLoginEvent(...)
+
     -- intialize the savedvariable
     PelleUtilsDB = PelleUtilsDB or {}
     self.db = MergeDefaults(self.Defaults, PelleUtilsDB)
@@ -79,11 +84,11 @@ function BlessMeisterAddon:OnPlayerLoginEvent(...)
     self.db.showHelp = self.db.showHelp ~= false
     PelleUtilsDB = self.db
 
-
-    SLASH_PELLEUTILS1 = "/pu"
+    self.short_slash = "/pu"
+    SLASH_PELLEUTILS1 = self.short_slash
     SLASH_PELLEUTILS2 = "/pelleutils"
-    SlashCmdList["PELLEUTILS"] = function(msg)
-        self:HandleSlashCommand(msg)
+    SlashCmdList["PELLEUTILS"] = function(...)
+        xpcall(function(...) self:HandleSlashCommand(...) end, self.Catch, ...)
     end
 
     self:Print("Version " .. self.Version .. " loaded.")
@@ -153,8 +158,12 @@ function BlessMeisterAddon:SendChatMessage(message, channel)
 end
 
 function BlessMeisterAddon:HandleSlashCommand(msg)
-    -- normalize it
-    local command = Trim(msg or ""):lower()
+    -- normalize it, and split on spaces
+    local input = Trim(msg or ""):lower()
+    local params = split(input)
+    local command = table.remove(params, 1) or "<none>"
+
+    self:debug("Command: " .. command)
 
     if command == "toggle" then
         self:ToggleEnabled()
@@ -171,17 +180,27 @@ function BlessMeisterAddon:HandleSlashCommand(msg)
         return
     end
 
+    if command == "trigger" then
+        if #params > 0 then
+            self.db.bless_triggerchance = tonumber(params[1])
+            self:Print("Trigger chance now set to " .. self.db.bless_triggerchance)
+        else
+            self:Print("Trigger chance currently set to " .. self.db.bless_triggerchance)
+        end
+        return
+    end
+
     if command == "blessing" then
         self:randomBlessing("target", "Blessing of Might")
         return
     end
 
     if command == "help" or command == "" then
-        self:Print("Usage: /pu toggle | /pu status | /pu say | /pu blessing | /pu help")
+        self:Print("Usage: "..self.short_slash.." toggle | "..self.short_slash.." status | "..self.short_slash.." say | "..self.short_slash.." blessing | "..self.short_slash.." help")
         return
     end
 
-    self:Print("Unknown command. Use /pu help")
+    self:Print("Unknown command. Use "..self.short_slash.." help")
 end
 
 function BlessMeisterAddon:OnUnitSpellcastSucceeded(unitCaster, castGUID, spellID, castBarID)
@@ -265,6 +284,26 @@ function BlessMeisterAddon:handleVariable(variable)
             return "brother"
         else
             return "friend"
+        end
+
+    elseif variable == "player_pronoun" then
+        local gender = UnitSex("player")
+        if gender == 2 then
+            return "her"
+        elseif gender == 3 then
+            return "him"
+        else
+            return "them"
+        end
+
+    elseif variable == "player_possessive_pronoun" then
+        local gender = UnitSex("player")
+        if gender == 2 then
+            return "her"
+        elseif gender == 3 then
+            return "his"
+        else
+            return "their"
         end
 
     elseif variable == "3p_pronoun" then
@@ -399,14 +438,36 @@ function BlessMeisterAddon:handleFragment(fragment, start, endchar)
 end
 
 function BlessMeisterAddon:BuildSelfBlessing()
+    local self_blessing = ""
 
-    local quip = RandomChoice({
-        "(By (the light|the (ancestors |)forge|my (ancestors |)beard)), may this {strengthen} me!",
-        "{strengthen} my (hand|arm|shield|weapon), {light}!",
-        "(stone and |)light, hold fast!"
+    self_blessing = RandomChoice({
+        "by (the light|the (ancestors |)forge|my (ancestors |)beard), ",
+        "by (dwarves and |earth and |mountain and |stone and |)(steel|light|hearth), ",
+        ""
     })
 
-    return capitalize(self:handleFragment(quip))
+    local quip = RandomChoice({
+        "may this {strengthen} me!",
+        "{strengthen} my (steel|hand|arm|shield|weapon), {light}!",
+        "i must (hold fast|be strong|have courage|press on)!"
+    })
+
+    self_blessing = self_blessing .. quip
+
+    self_blessing = capitalize(self:handleFragment(self_blessing))
+
+    if self.bless_channel == "EMOTE" then
+        local emote_quip = RandomChoice({
+            "seems (focused|deep|concentrated) in prayer",
+            "(stretches|reaches|gazes|lifts {player_possessive_pronoun} head) towards the (heavens|light|sky)",
+            "(chants|mumbles|says|whispers) a prayer( under {player_possessive_pronoun} breath|)( for {player_pronoun}self|)",
+            "touches (the ground|his shield|his heart)",
+            "(focuses|closes) {player_possessive_pronoun} eyes"
+        })
+        self_blessing = "*" .. capitalize(self:handleFragment(emote_quip)) .. "* " .. self_blessing
+    end
+
+    return self_blessing
 end
 
 function BlessMeisterAddon:BuildTargetBlessing()
@@ -481,6 +542,17 @@ function BlessMeisterAddon:BuildTargetBlessing()
         result = result .. "!"
     end
 
+    if self.bless_channel == "EMOTE" then
+        local emote_quip = RandomChoice({
+            "(shouts|reaches) towards {name}",
+            "seems (focused|deep|concentrated) in prayer",
+            "(stretches|reaches|gazes|lifts {player_possessive_pronoun} head) towards the (heavens|light|sky)",
+            "(chants|mumbles|says|whispers) a prayer( under {player_possessive_pronoun} breath|)( for {name}|)",
+            "touches (the ground|his shield|his heart)",
+            "(focuses|closes) {player_possessive_pronoun} eyes"
+        })
+        result = "*" .. capitalize(self:handleFragment(emote_quip)) .. "* " .. result
+    end
 
     return result
 end
@@ -496,15 +568,16 @@ function BlessMeisterAddon:randomBlessing(unit, spellName)
     self.current_spell_name = spellName
     self:debug("Blessing triggered on '%s' (%s) with spell '%s'", UnitName(unit), unit, spellName)
 
+    local sentence = nil
     if UnitIsUnit(unit, "player") then
-        local sentence = self:BuildSelfBlessing()
+        sentence = self:BuildSelfBlessing()
         self:debug("%s self blessing: %s", self.bless_channel, sentence)
-        self:SendChatMessage(sentence, self.bless_channel)
     else
-        local sentence = self:BuildTargetBlessing()
+        sentence = self:BuildTargetBlessing()
         self:debug("%s target blessing: %s", self.bless_channel, sentence)
-        self:SendChatMessage(sentence, self.bless_channel)
     end
+
+    self:SendChatMessage(sentence, self.bless_channel)
 end
 
 

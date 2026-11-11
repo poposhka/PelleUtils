@@ -98,27 +98,46 @@ def main():
 
     lua.SetUnitState("target", "Mira")
 
-    # test untracked event
+
+    print("Test untracked event")
     lua.SimulateEvent("UNIT_SPELLCAST_SUCCEEDED", "player", "spell-guid-lol", 12345, "cast-bar-id")
 
-    # test sent to valid
+    print("Test sent to valid")
     lua.SimulateEvent("UNIT_SPELLCAST_SENT", "player", "Mira", "spell-guid-lol", 12345)
 
-    # wrong spell landed
+    print("Test wrong spell landed")
     lua.SimulateEvent("UNIT_SPELLCAST_SUCCEEDED", "player", "wrong-guid-lol", 12345, "cast-bar-id")
 
-    # correct spell landed
+    print("Test correct spell landed")
     print("=== this should work ==")
     lua.SimulateEvent("UNIT_SPELLCAST_SUCCEEDED", "player", "spell-guid-lol", 12345, "cast-bar-id")
 
-    # correct spell, but already triggered
+    print("Test correct spell, but already triggered")
     lua.SimulateEvent("UNIT_SPELLCAST_SUCCEEDED", "player", "spell-guid-lol", 12345, "cast-bar-id")
 
-    # target nothing and cast (self)
+    print("Test target nothing and cast (self)")
     lua.SetUnitState("target", None)
     lua.SimulateEvent("UNIT_SPELLCAST_SENT", "player", "Bulbasaur", "spell-guid-lolz", 12345)
     lua.SimulateEvent("UNIT_SPELLCAST_SUCCEEDED", "player", "spell-guid-lolz", 12345, "cast-bar-id")
 
+    print("Test triggerset")
+    executeLua(lua.lua, f'''
+        SlashCmdList["PELLEUTILS"]("trigger")
+    ''')
 
+    print("Test triggerset")
+    executeLua(lua.lua, f'''
+        SlashCmdList["PELLEUTILS"]("trigger 0.7")
+    ''')
+
+    print("Test slash")
+    executeLua(lua.lua, f'''
+        SlashCmdList["PELLEUTILS"]("status")
+    ''')
+
+    print("Test slash bad")
+    executeLua(lua.lua, f'''
+        SlashCmdList["PELLEUTILS"]("ngkjsdlbfg")
+    ''')
 if __name__ == "__main__":
     main()
