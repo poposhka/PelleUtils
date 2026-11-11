@@ -11,7 +11,20 @@ except ImportError as exc:
 
 ROOT = Path(__file__).resolve().parent
 CORE_PATH = ROOT / "Core.lua"
+UTIL_PATH = ROOT / "Util.lua"
 
+def error(text : str):
+    print("\033[31m" + text + "\033[0m")
+
+
+def executeLua(lua, code):
+    try:
+        lua.execute(code)
+    except BaseException as e:
+        error("==== UNHANDLED LUA EXCEPTION ===")
+        print(e)
+        error("================================")
+        exit()
 
 class LuaFixture:
     def __init__(self) -> None:
@@ -19,11 +32,17 @@ class LuaFixture:
 
     def LoadAddon(self):
         self.lua = lupa.LuaRuntime(unpack_returned_tuples=True)
-        self.lua.execute(open("lua_fixture.lua").read())
+        executeLua(self.lua, open("lua_fixture.lua").read())
         load_core(self.lua)
 
     def SetUnitState(self, unit : str, name : str):
-        self.lua.globals().SetUnitState(unit, name)
+        try:
+            self.lua.globals().SetUnitState(unit, name)
+        except BaseException as e:
+            error("==== UNHANDLED LUA EXCEPTION ===")
+            print(e)
+            error("================================")
+            exit()
 
 
     def SimulateEvent(self, event_name : str, *args):
@@ -36,7 +55,8 @@ class LuaFixture:
 
         argument_string = ", ".join(argument_string)
         print("Simulating Event: ", argument_string)
-        self.lua.execute(
+
+        executeLua(self.lua,
             f'''
             for _, frame in ipairs(mockFrames) do
                 frame:SimulateFireEvent({argument_string})
@@ -45,7 +65,7 @@ class LuaFixture:
 
     def randomBlessing(self):
         #self.lua.globals().randomBlessing()
-        self.lua.execute(
+        executeLua(self.lua,
             f'''
             for _, frame in ipairs(mockFrames) do
                 frame:SimulateFireEvent("UNIT_SPELLCAST_SUCCEEDED", "player", "spell-guid-lol", 12345, "cast-bar-id")
@@ -53,13 +73,19 @@ class LuaFixture:
             ''')
 
 def load_core(lua):
-    code_path = str(CORE_PATH).replace('\\', '\\\\')
-    lua.execute(
+    util_path = str(UTIL_PATH).replace('\\', '\\\\')
+    core_path = str(CORE_PATH).replace('\\', '\\\\')
+    executeLua(lua,
         f'''
-        local chunk = assert(loadfile("{code_path}"))
         local addonName = "PelleUtils"
         local addon = {{}}
+
+        local chunk = assert(loadfile("{util_path}"))
         chunk(addonName, addon)
+
+        chunk = assert(loadfile("{core_path}"))
+        chunk(addonName, addon)
+
         for _, frame in ipairs(mockFrames) do
             frame:SimulateFireEvent("PLAYER_LOGIN", "player", "Mira", "spell-guid-lol", 12345)
         end
@@ -82,6 +108,7 @@ def main():
     lua.SimulateEvent("UNIT_SPELLCAST_SUCCEEDED", "player", "wrong-guid-lol", 12345, "cast-bar-id")
 
     # correct spell landed
+    print("=== this should work ==")
     lua.SimulateEvent("UNIT_SPELLCAST_SUCCEEDED", "player", "spell-guid-lol", 12345, "cast-bar-id")
 
     # correct spell, but already triggered

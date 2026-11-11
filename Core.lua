@@ -1,136 +1,7 @@
 local addonName, BlessMeisterAddon = ...
 
+
 -- Note that we use the SavedVariable PelleUtilsDB
-
--- Helper to get caller function name
-local function FuncName()
-    -- Start at stack depth 3 (1 = this function, 2 = current function, 3 = caller)
-    local stack = debugstack(3, 1, 0)
-    -- Extract the function name inside single quotes: in function 'FunctionName'
-    local file, line, func = stack:match("([^\\/:]+):(%d+): in function '([^']+)'")
-    if not line then
-        file, line = stack:match("([^\\/:]+):(%d+):")
-        func = "anonymous"
-    end
-    return file..":"..line..":"..func
-    
-end
-
--- Helper function to split a string
-local function split(text, separator)
-    local parts = {}
-    -- Escape punctuation characters to treat them as literal characters
-    local pattern = "(.-)" .. separator:gsub("%p", "%%%0")
-
-    -- Append the separator to guarantee the trailing empty string is caught
-    for part in (text .. separator):gmatch(pattern) do
-        table.insert(parts, part)
-    end
-    return parts
-end
-
--- Helper function to capitalize the first letter in a string
-local function capitalize(str)
-    if str == nil or str == "" then return "" end
-    return string.upper(string.sub(str, 1, 1)) .. string.sub(str, 2)
-end
-
--- Helper function to trim whitespace from a string
-local function Trim(value)
-    if value == nil then
-        return ""
-    end
-    return tostring(value):match("^%s*(.-)%s*$")
-end
-
--- Helper function to merge defaults into a saved table
-local function MergeDefaults(defaults, saved)
-    local merged = {}
-
-    for key, value in pairs(defaults) do
-        merged[key] = value
-    end
-
-    if type(saved) == "table" then
-        for key, value in pairs(saved) do
-            merged[key] = value
-        end
-    end
-
-    return merged
-end
-
--- Choose randomly from the items in the list or string
-local function RandomChoice(list)
-
-    if type(list) == "string" then
-        local options = split(list, "|")
-        return options[math.random(1, #options)]
-    end
-
-    if type(list) ~= "table" or #list == 0 then
-        return ""
-    end
-
-    local weightedChoices = {}
-    local totalWeight = 0
-
-    for _, entry in ipairs(list) do
-        local weight = 1
-        local value = ""
-
-        if type(entry) == "string" then
-            value = entry
-        elseif type(entry) == "table" then
-            if type(entry.weight) == "number" then
-                weight = entry.weight
-            elseif type(entry[1]) == "number" then
-                weight = entry[1]
-            end
-
-            if type(entry.text) == "string" then
-                value = entry.text
-            elseif type(entry.value) == "string" then
-                value = entry.value
-            elseif type(entry[2]) == "string" then
-                value = entry[2]
-            elseif type(entry[1]) == "string" then
-                value = entry[1]
-            end
-        end
-
-        if type(value) == "string" then
-            weight = tonumber(weight) or 1
-            if weight <= 0 then
-                weight = 1
-            end
-
-            totalWeight = totalWeight + weight
-            table.insert(weightedChoices, { weight = weight, value = value })
-        end
-    end
-
-    if #weightedChoices == 0 then
-        return ""
-    end
-
-    if totalWeight <= 0 then
-        return weightedChoices[math.random(1, #weightedChoices)].value
-    end
-
-    local roll = math.random() * totalWeight
-    local cursor = 0
-
-    for _, choice in ipairs(weightedChoices) do
-        cursor = cursor + choice.weight
-        if roll <= cursor then
-            return choice.value
-        end
-    end
-
-    return weightedChoices[#weightedChoices].value
-end
-
 
 -- Our AddOn Class
 
@@ -146,8 +17,8 @@ function BlessMeisterAddon:init(addonName)
     }
     self.tabs = 0
     self.current_target = "target"
-    self.prepared_blessing = nil
     self.spell_queue = {}
+    self.bless_channel = "EMOTE"
 
     self.UNIT_TOKENS = {
         "target", "mouseover", "focus", "player"
@@ -162,15 +33,26 @@ function BlessMeisterAddon:init(addonName)
         table.insert(self.UNIT_TOKENS, "arena" .. n)
     end
 
-
     self.frame = CreateFrame("Frame")
     self.frame:RegisterEvent("PLAYER_LOGIN")
     self.frame:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
     self.frame:RegisterUnitEvent("UNIT_SPELLCAST_SENT", "player")
-    self.frame:SetScript("OnEvent", function(frame, ...) self:OnEvent(...) end)
+    self.frame:SetScript("OnEvent", function(frame, ...) self:SafeOnEvent(...) end)
+end
+
+function BlessMeisterAddon:SafeOnEvent(...)
+    local ok, result = xpcall(self.OnEvent, function(err)
+        return err .. ":\n" .. debugstack(2)
+    end,
+    self, ...)
+
+    if not ok then
+        self:error(result)
+    end
 end
 
 function BlessMeisterAddon:OnEvent(event, ...)
+
     self:debug(event)
 
     if event == "PLAYER_LOGIN" then
@@ -183,6 +65,7 @@ function BlessMeisterAddon:OnEvent(event, ...)
         self:OnUnitSpellcastSucceeded(...)
 
     end
+
 end
 
 function BlessMeisterAddon:OnPlayerLoginEvent(...)
@@ -216,12 +99,12 @@ function BlessMeisterAddon:whichUnit(unit_name)
     for _, token in ipairs(self.UNIT_TOKENS) do
         local token_unit_name, token_unit_last = UnitName(token)
         if token_unit_name ~= nil then
-            
+
             if token_unit_last ~= nil then
                 token_unit_name = token_unit_name .." ".. token_unit_last
             end
 
-            self:debug("Is token "..tostring(token).." name "..tostring(token_unit_name).." = "..tostring(unit_name).." ?")
+            self:debug("Is token '"..tostring(token).."' name "..tostring(token_unit_name).." = "..tostring(unit_name).." ?")
             if token_unit_name == unit_name then
                 return token
             end
@@ -237,7 +120,14 @@ end
 
 function BlessMeisterAddon:debug(message, ...)
     local text = tostring(message):format(...)
-    DEFAULT_CHAT_FRAME:AddMessage("["..FuncName().."] " .. text)
+    local frame = GetChatFrameByName("debug")
+    frame:AddMessage("["..FuncName().."] " .. text)
+end
+
+function BlessMeisterAddon:error(message, ...)
+    local text = tostring(message):format(...)
+    local frame = GetChatFrameByName("error")
+    frame:AddMessage("["..FuncName().."] " .. text)
 end
 
 -- Helper function to save our settings
@@ -252,6 +142,14 @@ function BlessMeisterAddon:ToggleEnabled()
     self.db.enabled = not self.db.enabled
     self:Save()
     self:Print(self.db.enabled and "Enabled." or "Disabled.")
+end
+
+function BlessMeisterAddon:SendChatMessage(message, channel)
+    if C_ChatInfo ~= nil then
+        C_ChatInfo.SendChatMessage(message, channel)
+    else
+        SendChatMessage(message, channel)
+    end
 end
 
 function BlessMeisterAddon:HandleSlashCommand(msg)
@@ -278,16 +176,6 @@ function BlessMeisterAddon:HandleSlashCommand(msg)
         return
     end
 
-    if command == "sayblessing" then
-        if self.prepared_blessing ~= nil then
-            C_ChatInfo.SendChatMessage(self.prepared_blessing, "SAY")
-            self.prepared_blessing = nil
-        else
-            self:debug("No blessing prepared.")
-        end
-        return
-    end
-
     if command == "help" or command == "" then
         self:Print("Usage: /pu toggle | /pu status | /pu say | /pu blessing | /pu help")
         return
@@ -302,8 +190,6 @@ function BlessMeisterAddon:OnUnitSpellcastSucceeded(unitCaster, castGUID, spellI
         self:debug("invalid caster %s", unitCaster)
         return
     end
-
-    self.prepared_blessing = nil
 
     -- are we expecting a cast?
     local spell_item = self.spell_queue[castGUID]
@@ -347,8 +233,6 @@ function BlessMeisterAddon:OnUnitSpellcastSent(unitCaster, target_name, castGUID
         return
     end
 
-    self.prepared_blessing = nil
-
     -- resolve target and only consider valid tokens
     local unitTarget = self:whichUnit(target_name)
 
@@ -366,7 +250,13 @@ function BlessMeisterAddon:OnUnitSpellcastSent(unitCaster, target_name, castGUID
     end
 end
 
+function BlessMeisterAddon:ClassChoice(choices, default)
+    local class = (UnitClass(self.current_target) or OTHER):lower()
+    return choices[class] or default
+end
+
 function BlessMeisterAddon:handleVariable(variable)
+
     if variable == "sibling" then
         local gender = UnitSex(self.current_target)
         if gender == 2 then
@@ -376,6 +266,7 @@ function BlessMeisterAddon:handleVariable(variable)
         else
             return "friend"
         end
+
     elseif variable == "3p_pronoun" then
         local gender = UnitSex(self.current_target)
         if gender == 2 then
@@ -385,6 +276,7 @@ function BlessMeisterAddon:handleVariable(variable)
         else
             return "them"
         end
+
     elseif variable == "3p_pronoun_poss" then
         local gender = UnitSex(self.current_target)
         if gender == 2 then
@@ -394,66 +286,73 @@ function BlessMeisterAddon:handleVariable(variable)
         else
             return "their"
         end
+
     elseif variable == "possessive_adjective" then
         return "(your|thine)"
+
     elseif variable == "name" then
         return UnitName(self.current_target) or "friend"
+
     elseif variable == "race" then
         return UnitRace(self.current_target) or "stranger"
+
     elseif variable == "protection_active" then
         return "(guide|bless|protect|guard|shield|watch over)"
+
     elseif variable == "class" then
         return UnitClass(self.current_target) or "Hero"
+
     elseif variable == "title" then
         return "(({sibling} |){name}|{race}|{class})"
+
     elseif variable == "light" then
         return "(blessed |holy |sacred |eternal |glorious |)light"
+
     elseif variable == "blessing" then
         return "(boon|blessing|benediction|grace|gift|favor|grace|mercy)"
+
     elseif variable == "strengthen" then
         return "(bless|strengthen|bolster|lead)"
+
     elseif variable == "class_asset" then
-        local class = (UnitClass(self.current_target) or "Hero"):lower()
-        local switch = {
-            ["warrior"] = "(arm|fist|blade)",
-            ["priest"] = "soul",
-            ["paladin"] = "heart",
-            ["rogue"] = "senses",
-            ["warlock"] = "ways",
-            ["mage"] = "mind",
-            ["druid"] = "spirit",
-            ["hunter"] = "step",
-            ["shaman"] = "ancestors",
-        }
-        return switch[class] or "body"
+        return self:ClassChoice({
+            [WARRIOR] = "(arm|fist|blade)",
+            [PRIEST] = "soul",
+            [PALADIN] = "heart",
+            [ROGUE] = "senses",
+            [WARLOCK] = "ways",
+            [MAGE] = "mind",
+            [DRUID] = "spirit",
+            [HUNTER] = "step",
+            [SHAMAN] = "ancestors"
+        }, "courage")
+
     elseif variable == "class_attribute" then
-        local class = (UnitClass(self.current_target) or "Hero"):lower()
-        local switch = {
-            ["warrior"] = "(true|courageous|brave|strong|fierce|unyielding|honorable)",
-            ["priest"] = "(true|faithful|with the light)",
-            ["paladin"] = "(true|courageous|brave|strong|fierce|unyielding|faithful|with the light)",
-            ["rogue"] = "(cunning|fierce|deadly)",
-            ["warlock"] = "(cunning|courageous)",
-            ["mage"] = "(brilliant|courageous)",
-            ["druid"] = "(true|resolute)",
-            ["hunter"] = "(swift|true|straight)",
-            ["shaman"] = "(true|faithful|honorable)",
-        }
-        return switch[class] or "true"
+        return self:ClassChoice({
+            [WARRIOR] = "(true|courageous|brave|strong|fierce|unyielding|honorable)",
+            [PRIEST] = "(true|faithful|with the light)",
+            [PALADIN] = "(true|courageous|brave|strong|fierce|unyielding|faithful|with the light)",
+            [ROGUE] = "(cunning|fierce|deadly)",
+            [WARLOCK] = "(cunning|courageous)",
+            [MAGE] = "(brilliant|courageous)",
+            [DRUID] = "(true|resolute)",
+            [HUNTER] = "(swift|true|straight)",
+            [SHAMAN] = "(true|faithful|honorable)",
+        }, "true")
+
     elseif variable == "class_weapon" then
-        local class = (UnitClass(self.current_target) or "Hero"):lower()
-        local switch = {
-            ["warrior"] = "(axe|sword|hammer)",
-            ["priest"] = "(faith|healing|heart)",
-            ["paladin"] = "(courage|pure heart|hammer)",
-            ["rogue"] = "(blades|cunning ways|instincts)",
-            ["warlock"] = "(magicks|unholy acts|connection to the nether)",
-            ["mage"] = "(brilliance|magicks|arcana|fire and frost)",
-            ["druid"] = "(connection to nature|strength of spirit|bond with nature)",
-            ["hunter"] = "(sharp arrows|bow and companion|instincts)",
-            ["shaman"] = "(ancestors|ancestral bond|connection to the earth)",
-        }
-        return switch[class] or "courage"
+        return self:ClassChoice({
+            [WARRIOR] = "(axe|sword|hammer)",
+            [PRIEST] = "(faith|healing|heart)",
+            [PALADIN] = "(courage|pure heart|hammer)",
+            [ROGUE] = "(blades|cunning ways|instincts)",
+            [WARLOCK] = "(magicks|unholy acts|connection to the nether)",
+            [MAGE] = "(brilliance|magicks|arcana|fire and frost)",
+            [DRUID] = "(connection to nature|strength of spirit|bond with nature)",
+            [HUNTER] = "(sharp arrows|bow and companion|instincts)",
+            [SHAMAN] = "(ancestors|ancestral bond|connection to the earth)",
+        }, "courage")
+
     else
         return variable
     end
@@ -599,12 +498,12 @@ function BlessMeisterAddon:randomBlessing(unit, spellName)
 
     if UnitIsUnit(unit, "player") then
         local sentence = self:BuildSelfBlessing()
-        self:debug("Setting self blessing: %s", sentence)
-        self.prepared_blessing = sentence
+        self:debug("%s self blessing: %s", self.bless_channel, sentence)
+        self:SendChatMessage(sentence, self.bless_channel)
     else
         local sentence = self:BuildTargetBlessing()
-        self:debug("Setting target blessing: %s", sentence)
-        self.prepared_blessing = sentence
+        self:debug("%s target blessing: %s", self.bless_channel, sentence)
+        self:SendChatMessage(sentence, self.bless_channel)
     end
 end
 
