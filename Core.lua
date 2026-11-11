@@ -146,6 +146,7 @@ function BlessMeisterAddon:init(addonName)
     }
     self.tabs = 0
     self.current_target = "target"
+    self.prepared_blessing = nil
     self.spell_queue = {}
 
     self.UNIT_TOKENS = {
@@ -198,7 +199,9 @@ function BlessMeisterAddon:OnPlayerLoginEvent(...)
 
     SLASH_PELLEUTILS1 = "/pu"
     SLASH_PELLEUTILS2 = "/pelleutils"
-    SlashCmdList["PELLEUTILS"] = HandleSlashCommand
+    SlashCmdList["PELLEUTILS"] = function(msg)
+        self:HandleSlashCommand(msg)
+    end
 
     self:Print("Version " .. self.Version .. " loaded.")
     self:Print(self.db.message)
@@ -211,8 +214,17 @@ function BlessMeisterAddon:whichUnit(unit_name)
     end
 
     for _, token in ipairs(self.UNIT_TOKENS) do
-        if UnitName(token) == unit_name then
-            return token
+        local token_unit_name, token_unit_last = UnitName(token)
+        if token_unit_name ~= nil then
+            
+            if token_unit_last ~= nil then
+                token_unit_name = token_unit_name .." ".. token_unit_last
+            end
+
+            self:debug("Is token "..tostring(token).." name "..tostring(token_unit_name).." = "..tostring(unit_name).." ?")
+            if token_unit_name == unit_name then
+                return token
+            end
         end
     end
     return nil
@@ -262,7 +274,17 @@ function BlessMeisterAddon:HandleSlashCommand(msg)
     end
 
     if command == "blessing" then
-        self:randomBlessing("target")
+        self:randomBlessing("target", "Blessing of Might")
+        return
+    end
+
+    if command == "sayblessing" then
+        if self.prepared_blessing ~= nil then
+            C_ChatInfo.SendChatMessage(self.prepared_blessing, "SAY")
+            self.prepared_blessing = nil
+        else
+            self:debug("No blessing prepared.")
+        end
         return
     end
 
@@ -281,6 +303,8 @@ function BlessMeisterAddon:OnUnitSpellcastSucceeded(unitCaster, castGUID, spellI
         return
     end
 
+    self.prepared_blessing = nil
+
     -- are we expecting a cast?
     local spell_item = self.spell_queue[castGUID]
     if spell_item == nil then
@@ -289,11 +313,13 @@ function BlessMeisterAddon:OnUnitSpellcastSucceeded(unitCaster, castGUID, spellI
     end
 
     -- clear it
+    self:debug("dequeueing spell '%s' (%d) on '%s' (%s)", castGUID, spellID, UnitName(spell_item.unitTarget), spell_item.unitTarget)
     self.spell_queue[castGUID] = nil
 
     -- is this a real spell?
     local spellInfo = C_Spell.GetSpellInfo(spellID)
     if spellInfo == nil then
+        self:debug("Unable to resolve spellID %d", spellID)
         return
     end
 
@@ -301,7 +327,10 @@ function BlessMeisterAddon:OnUnitSpellcastSucceeded(unitCaster, castGUID, spellI
 
     -- check for spell name
     if string.find(spellName, "Blessing of") == 1 then
+        self:debug("Spell '%s' (%d) is a blessing - invoking random blessing", spellName, spellID)
         self:randomBlessing(spell_item.unitTarget, spellName)
+    else
+        self:debug("Spell '%s' (%d) is not a blessing", spellName, spellID)
     end
 
 end
@@ -317,6 +346,8 @@ function BlessMeisterAddon:OnUnitSpellcastSent(unitCaster, target_name, castGUID
     if unitCaster ~= "player" then
         return
     end
+
+    self.prepared_blessing = nil
 
     -- resolve target and only consider valid tokens
     local unitTarget = self:whichUnit(target_name)
@@ -558,18 +589,22 @@ end
 function BlessMeisterAddon:randomBlessing(unit, spellName)
 
     if math.random() > self.db.bless_triggerchance then
+        self:debug("Blessing not triggered (random chance %.2f > trigger chance %.2f)", math.random(), self.db.bless_triggerchance)
         return
     end
 
     self.current_target = unit
     self.current_spell_name = spellName
+    self:debug("Blessing triggered on '%s' (%s) with spell '%s'", UnitName(unit), unit, spellName)
 
     if UnitIsUnit(unit, "player") then
         local sentence = self:BuildSelfBlessing()
-        SendChatMessage(sentence, "SAY")
+        self:debug("Setting self blessing: %s", sentence)
+        self.prepared_blessing = sentence
     else
         local sentence = self:BuildTargetBlessing()
-        SendChatMessage(sentence, "SAY")
+        self:debug("Setting target blessing: %s", sentence)
+        self.prepared_blessing = sentence
     end
 end
 
