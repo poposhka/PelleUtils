@@ -10,8 +10,8 @@ except ImportError as exc:
 
 
 ROOT = Path(__file__).resolve().parent
-CORE_PATH = ROOT / "Core.lua"
 UTIL_PATH = ROOT / "Util.lua"
+BLESSMEISTER_PATH = ROOT / "BlessMeister.lua"
 
 def error(text : str):
     print("\033[31m" + text + "\033[0m")
@@ -74,7 +74,7 @@ class LuaFixture:
 
 def load_core(lua):
     util_path = str(UTIL_PATH).replace('\\', '\\\\')
-    core_path = str(CORE_PATH).replace('\\', '\\\\')
+    bless_path = str(BLESSMEISTER_PATH).replace('\\', '\\\\')
     executeLua(lua,
         f'''
         local addonName = "PelleUtils"
@@ -83,7 +83,7 @@ def load_core(lua):
         local chunk = assert(loadfile("{util_path}"))
         chunk(addonName, addon)
 
-        chunk = assert(loadfile("{core_path}"))
+        chunk = assert(loadfile("{bless_path}"))
         chunk(addonName, addon)
 
         for _, frame in ipairs(mockFrames) do

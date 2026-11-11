@@ -6,5 +6,6 @@
 ## SavedVariablesPerCharacter: PelleUtilsDB
 ## DefaultState: enabled
 
-Core.lua
+Util.lua
+BlessMeister.lua
 Config.lua
