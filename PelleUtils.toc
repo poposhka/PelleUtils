@@ -1,7 +1,7 @@
 ## Interface: 16001
 ## Title: PelleUtils
 ## Notes: A lightweight utility addon for World of Warcraft Forever.
-## Author: GitHub Copilot
+## Author: Per Franck
 ## Version: 0.1.0
 ## SavedVariablesPerCharacter: PelleUtilsDB
 ## DefaultState: enabled
