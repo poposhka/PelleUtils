@@ -19,6 +19,7 @@ function BlessMeisterAddon:init(addonName)
     self.current_target = "target"
     self.spell_queue = {}
     self.bless_channel = "EMOTE"
+    self.last_blessing = nil
 
     self.UNIT_TOKENS = {
         "target", "mouseover", "focus", "player"
@@ -82,6 +83,7 @@ function BlessMeisterAddon:OnPlayerLoginEvent(...)
     self.db.bless_triggerchance = self.db.bless_triggerchance or self.Defaults.bless_triggerchance
     self.db.color = self.db.color or self.Defaults.color
     self.db.showHelp = self.db.showHelp ~= false
+    self.db.no_trigger = self.db.no_trigger ~= true
     PelleUtilsDB = self.db
 
     self.short_slash = "/pu"
@@ -176,7 +178,10 @@ function BlessMeisterAddon:HandleSlashCommand(msg)
     end
 
     if command == "say" then
-        self:Print(self.db.message)
+        if self.last_blessing then
+            self:SendChatMessage(self.last_blessing, self.bless_channel)
+            self.last_blessing = nil
+        end
         return
     end
 
@@ -194,6 +199,7 @@ function BlessMeisterAddon:HandleSlashCommand(msg)
         self:randomBlessing("target", "Blessing of Might")
         return
     end
+    
 
     if command == "help" or command == "" then
         self:Print("Usage: "..self.short_slash.." toggle | "..self.short_slash.." status | "..self.short_slash.." say | "..self.short_slash.." blessing | "..self.short_slash.." help")
@@ -251,6 +257,9 @@ function BlessMeisterAddon:OnUnitSpellcastSent(unitCaster, target_name, castGUID
     if unitCaster ~= "player" then
         return
     end
+
+    -- clear the last blessing
+    self.last_blessing = nil
 
     -- resolve target and only consider valid tokens
     local unitTarget = self:whichUnit(target_name)
@@ -577,7 +586,11 @@ function BlessMeisterAddon:randomBlessing(unit, spellName)
         self:debug("%s target blessing: %s", self.bless_channel, sentence)
     end
 
-    self:SendChatMessage(sentence, self.bless_channel)
+    if self.db.no_trigger then
+        self.last_blessing = sentence
+    else
+        self:SendChatMessage(sentence, self.bless_channel)
+    end
 end
 
 
