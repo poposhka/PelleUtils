@@ -126,15 +126,31 @@ function BlessMeisterAddon:Print(message)
 end
 
 function BlessMeisterAddon:debug(message, ...)
-    local text = tostring(message):format(...)
+    local formatted_args = {}
+    for i = 1, select("#", ...) do
+        local arg = select(i, ...)
+        table.insert(formatted_args, tostring(arg))
+    end
+    message = ""
+    for k in ipairs(...) do
+        message = message:gsub("%%" .. k, formatted_args[k])
+    end
     local frame = GetChatFrameByName("debug")
-    frame:AddMessage("["..FuncName().."] " .. text)
+    frame:AddMessage("["..FuncName().."] " .. message)
 end
 
 function BlessMeisterAddon:error(message, ...)
-    local text = tostring(message):format(...)
+    local formatted_args = {}
+    for i = 1, select("#", ...) do
+        local arg = select(i, ...)
+        table.insert(formatted_args, tostring(arg))
+    end
+    message = ""
+    for k in ipairs(...) do
+        message = message:gsub("%%" .. k, formatted_args[k])
+    end
     local frame = GetChatFrameByName("error")
-    frame:AddMessage("["..FuncName().."] " .. text)
+    frame:AddMessage("["..FuncName().."] " .. message)
 end
 
 -- Helper function to save our settings
