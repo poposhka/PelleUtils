@@ -1,13 +1,22 @@
-function a()
-    return {1, 2, 3}
+
+
+a = {
+    name = "pelle",
+    handlers = {
+    }
+}
+
+function a:bar()
+    print("in bar = ".. self.name)
+end
+
+function a:foo()
+
+    print(self.name)
+    self.handlers["bar"](self)
 end
 
 
-p = a()
+-- a.handlers.bar = a.bar
 
-x = table.remove(p, 1)
-y = p[1] 
-
-print(x)
-
-print(y)
+a:foo()

@@ -17,9 +17,12 @@ function BlessMeisterAddon:init(addonName)
     }
     self.tabs = 0
     self.current_target = "target"
-    self.spell_queue = {}
-    self.bless_channel = "EMOTE"
-    self.last_blessing = nil
+    self.sentence_channel = "EMOTE"
+    self.last_sentence = nil
+    self.last_sentence_timeout = 0
+    -- map pattern (string) -> sentence builder (function)
+    self.spell_maps = {}
+
 
     self.UNIT_TOKENS = {
         "target", "mouseover", "focus", "player"
@@ -33,6 +36,9 @@ function BlessMeisterAddon:init(addonName)
     for n = 1, 4 do
         table.insert(self.UNIT_TOKENS, "arena" .. n)
     end
+
+
+    self.spell_maps["Blessing of .+"] = self.OnDwarfPaladinBlessing
 
     self.frame = CreateFrame("Frame")
     self.frame:RegisterEvent("PLAYER_LOGIN")
@@ -83,7 +89,6 @@ function BlessMeisterAddon:OnPlayerLoginEvent(...)
     self.db.bless_triggerchance = self.db.bless_triggerchance or self.Defaults.bless_triggerchance
     self.db.color = self.db.color or self.Defaults.color
     self.db.showHelp = self.db.showHelp ~= false
-    self.db.no_trigger = self.db.no_trigger ~= true
     PelleUtilsDB = self.db
 
     self.short_slash = "/pu"
@@ -126,13 +131,13 @@ function BlessMeisterAddon:Print(message)
 end
 
 function BlessMeisterAddon:debug(message, ...)
+    print(message)
     local formatted_args = {}
     for i = 1, select("#", ...) do
         local arg = select(i, ...)
         table.insert(formatted_args, tostring(arg))
     end
-    message = ""
-    for k in ipairs(...) do
+    for k in ipairs{(...)} do
         message = message:gsub("%%" .. k, formatted_args[k])
     end
     local frame = GetChatFrameByName("debug")
@@ -194,10 +199,24 @@ function BlessMeisterAddon:HandleSlashCommand(msg)
     end
 
     if command == "say" then
-        if self.last_blessing then
-            self:SendChatMessage(self.last_blessing, self.bless_channel)
-            self.last_blessing = nil
+
+        -- if no sentence is created, we simply hold our piece
+        if self.last_sentence == nil then
+            self:debug("No sentence ready to say")
+            return
         end
+
+        -- check if the timeout has expired, if so, don't speak
+        local stale_time = GetTime() - self.last_sentence_timeout
+        if stale_time > 0 then
+            self:debug("Sentence was %d sec stale: %s", stale_time, self.last_sentence)
+            self.last_sentence = nil
+            return
+        end
+
+        -- seems all conditions hold, speak up, then clear it
+        self:SendChatMessage(self.last_sentence, self.sentence_channel)
+        self.last_sentence = nil
         return
     end
 
@@ -211,12 +230,6 @@ function BlessMeisterAddon:HandleSlashCommand(msg)
         return
     end
 
-    if command == "blessing" then
-        self:randomBlessing("target", "Blessing of Might")
-        return
-    end
-    
-
     if command == "help" or command == "" then
         self:Print("Usage: "..self.short_slash.." toggle | "..self.short_slash.." status | "..self.short_slash.." say | "..self.short_slash.." blessing | "..self.short_slash.." help")
         return
@@ -226,22 +239,36 @@ function BlessMeisterAddon:HandleSlashCommand(msg)
 end
 
 function BlessMeisterAddon:OnUnitSpellcastSucceeded(unitCaster, castGUID, spellID, castBarID)
+    -- not used
+end
 
+function BlessMeisterAddon:OnUnitSpellcastSent(unitCaster, target_name, castGUID, spellID)
+    -- OnUnitSpellcastSent
+    --  If we detect a spell being sent by the player we will generate something to say that can be
+    --  triggered by the `say` slash command. Since we don't know if the spell will be successful at this point
+    --  and we don't have the means to reliably delay without spamming `say`, we will make some rudimentary checks on the
+    --  target to guess if we can assume it's reasonable that (and what) we should speak.
+    --
+    -- Arguments:
+    --  unitCaster:     the person who cast the spell
+    --  target_name:    the NAME of the target
+    --  castGUID:       unique ephemeral ID of the spellcast
+    --  spellID:        unique identifier of the spell
+
+    -- only consider my own spells
     if unitCaster ~= "player" then
-        self:debug("invalid caster %s", unitCaster)
         return
     end
 
-    -- are we expecting a cast?
-    local spell_item = self.spell_queue[castGUID]
-    if spell_item == nil then
-        self:debug("untracked spell GUID %s", castGUID)
+    -- clear the last blessing
+    self.last_sentence = nil
+
+    -- can we resolve target?
+    local unitTarget = self:whichUnit(target_name)
+    if unitTarget == nil then
+        self:debug("Unable to resolve target name %s", target_name)
         return
     end
-
-    -- clear it
-    self:debug("dequeueing spell '%s' (%d) on '%s' (%s)", castGUID, spellID, UnitName(spell_item.unitTarget), spell_item.unitTarget)
-    self.spell_queue[castGUID] = nil
 
     -- is this a real spell?
     local spellInfo = C_Spell.GetSpellInfo(spellID)
@@ -250,48 +277,39 @@ function BlessMeisterAddon:OnUnitSpellcastSucceeded(unitCaster, castGUID, spellI
         return
     end
 
-    local spellName = spellInfo and spellInfo.name
-
-    -- check for spell name
-    if string.find(spellName, "Blessing of") == 1 then
-        self:debug("Spell '%s' (%d) is a blessing - invoking random blessing", spellName, spellID)
-        self:randomBlessing(spell_item.unitTarget, spellName)
-    else
-        self:debug("Spell '%s' (%d) is not a blessing", spellName, spellID)
+    -- Is the spell in our spellmapping?
+    local spell_handler = nil
+    for pattern, handler in ipairs(self.spell_maps) do
+        if spellInfo.name:find(pattern) then
+            spell_handler = handler
+            break
+        end
     end
 
-end
-
-function BlessMeisterAddon:OnUnitSpellcastSent(unitCaster, target_name, castGUID, spellID)
-    -- Arguments:
-    --  unitCaster:     the person who cast the spell
-    --  target_name:    the NAME of the target
-    --  castGUID:       unique ephemeral ID of the spellcast
-    --  spellID:        unique identifier of the spell
-
-    -- only consider my spells
-    if unitCaster ~= "player" then
+    -- bail if no handler for this message exists
+    if spell_handler == nil then
+        self:debug("No handler for %s found", spellInfo.name)
         return
     end
 
-    -- clear the last blessing
-    self.last_blessing = nil
-
-    -- resolve target and only consider valid tokens
-    local unitTarget = self:whichUnit(target_name)
-
-    -- if successful, store the cast
-    if unitTarget ~= nil then
-        -- Store the target's name
-        self:debug("Enqueueing spell '%s' (%d) on '%s' (%s)", castGUID, spellID, target_name, unitTarget)
-        self.spell_queue[castGUID] = {
-            timestamp = GetTime(),
-            unitTarget = unitTarget,
-            spellID = spellID
-        }
-    else
-        self:debug("Unable to identify target '%s'", target_name)
+    if math.random() > self.db.bless_triggerchance then
+        self:debug("Spellspeak not triggered (random chance %.2f > trigger chance %.2f)", math.random(), self.db.bless_triggerchance)
+        return
     end
+
+
+    self.current_target = unitTarget
+    self.current_spell_name = spellName
+    self:debug("Blessing triggered on '%s' (%s) with spell '%s'", UnitName(unit), unit, spellName)
+
+
+    -- invoke the handler
+    self:debug("Invoking handler '%s'", spell_handler)
+    local sentence = self.spell_maps[spell_handler](self)
+
+    self.last_sentence = sentence
+    self.last_sentence_timeout = GetTime() + 0.5
+
 end
 
 function BlessMeisterAddon:ClassChoice(choices, default)
@@ -462,6 +480,16 @@ function BlessMeisterAddon:handleFragment(fragment, start, endchar)
     return result, endindex
 end
 
+function BlessMeisterAddon:OnDwarfPaladinBlessing()
+
+    if self.current_target == "player" then
+        return self:BuildSelfBlessing()
+    else
+        return self:BuildTargetBlessing()
+    end
+
+end
+
 function BlessMeisterAddon:BuildSelfBlessing()
     local self_blessing = ""
 
@@ -481,7 +509,7 @@ function BlessMeisterAddon:BuildSelfBlessing()
 
     self_blessing = capitalize(self:handleFragment(self_blessing))
 
-    if self.bless_channel == "EMOTE" then
+    if self.sentence_channel == "EMOTE" then
         local emote_quip = RandomChoice({
             "seems (focused|deep|concentrated) in prayer",
             "(stretches|reaches|gazes|lifts {player_possessive_pronoun} head) towards the (heavens|light|sky)",
@@ -567,7 +595,7 @@ function BlessMeisterAddon:BuildTargetBlessing()
         result = result .. "!"
     end
 
-    if self.bless_channel == "EMOTE" then
+    if self.sentence_channel == "EMOTE" then
         local emote_quip = RandomChoice({
             "(shouts|reaches) towards {name}",
             "seems (focused|deep|concentrated) in prayer",
@@ -581,34 +609,6 @@ function BlessMeisterAddon:BuildTargetBlessing()
 
     return result
 end
-
-function BlessMeisterAddon:randomBlessing(unit, spellName)
-
-    if math.random() > self.db.bless_triggerchance then
-        self:debug("Blessing not triggered (random chance %.2f > trigger chance %.2f)", math.random(), self.db.bless_triggerchance)
-        return
-    end
-
-    self.current_target = unit
-    self.current_spell_name = spellName
-    self:debug("Blessing triggered on '%s' (%s) with spell '%s'", UnitName(unit), unit, spellName)
-
-    local sentence = nil
-    if UnitIsUnit(unit, "player") then
-        sentence = self:BuildSelfBlessing()
-        self:debug("%s self blessing: %s", self.bless_channel, sentence)
-    else
-        sentence = self:BuildTargetBlessing()
-        self:debug("%s target blessing: %s", self.bless_channel, sentence)
-    end
-
-    if self.db.no_trigger then
-        self.last_blessing = sentence
-    else
-        self:SendChatMessage(sentence, self.bless_channel)
-    end
-end
-
 
 -- initialize
 BlessMeisterAddon:init(addonName)

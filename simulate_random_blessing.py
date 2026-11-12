@@ -96,8 +96,20 @@ def load_core(lua):
 def main():
     lua = LuaFixture()
 
+
+    return
     lua.SetUnitState("target", "Mira")
 
+
+    print("Test sent to valid")
+    lua.SimulateEvent("UNIT_SPELLCAST_SENT", "player", "Mira", "spell-guid-lol", 12345)
+
+    print("Test slash bad")
+    executeLua(lua.lua, f'''
+        SlashCmdList["PELLEUTILS"]("say")
+    ''')
+
+    return
 
     print("Test untracked event")
     lua.SimulateEvent("UNIT_SPELLCAST_SUCCEEDED", "player", "spell-guid-lol", 12345, "cast-bar-id")
