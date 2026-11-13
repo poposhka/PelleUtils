@@ -283,6 +283,14 @@ function UnitRace(unit)
     return nil, nil, nil
 end
 
+function UnitFullName(unit)
+    local unit_state = UnitStates[unit]
+    if unit_state then
+        return unit_state.name, unit_state.last
+    end
+    return nil, nil
+end
+
 -- Mocked WOW API function to check sex of unit
 -- returns: 1=unknown/neutral 2=male 3=female
 function UnitSex(unit)
