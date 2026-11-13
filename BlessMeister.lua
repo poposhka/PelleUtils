@@ -39,6 +39,7 @@ function BlessMeisterAddon:init(addonName)
 
 
     self.spell_maps["Blessing of .+"] = self.OnDwarfPaladinBlessing
+    self.spell_maps["Holy Light"] = self.OnDwarfPaladinBlessing
 
     self.frame = CreateFrame("Frame")
     self.frame:RegisterEvent("PLAYER_LOGIN")
@@ -116,7 +117,7 @@ function BlessMeisterAddon:whichUnit(unit_name)
                 token_unit_name = token_unit_name .." ".. token_unit_last
             end
 
-            self:debug("Is token '"..tostring(token).."' name "..tostring(token_unit_name).." = "..tostring(unit_name).." ?")
+            self:debug("Is token %s (name %s) = %s ? %s", token, token_unit_name, unit_name, unit_name == token_unit_name)
             if token_unit_name == unit_name then
                 return token
             end
@@ -131,29 +132,23 @@ function BlessMeisterAddon:Print(message)
 end
 
 function BlessMeisterAddon:debug(message, ...)
-    print(message)
-    local formatted_args = {}
+    -- force replace arguments with strings
     for i = 1, select("#", ...) do
         local arg = select(i, ...)
-        table.insert(formatted_args, tostring(arg))
+        message = message:gsub("%%[^ ]+", tostring(arg), 1)
     end
-    for k in ipairs{(...)} do
-        message = message:gsub("%%" .. k, formatted_args[k])
-    end
+   
     local frame = GetChatFrameByName("debug")
     frame:AddMessage("["..FuncName().."] " .. message)
 end
 
 function BlessMeisterAddon:error(message, ...)
-    local formatted_args = {}
+    -- force replace arguments with strings
     for i = 1, select("#", ...) do
         local arg = select(i, ...)
-        table.insert(formatted_args, tostring(arg))
+        message = message:gsub("%%[^ ]+?[sdfuli]", tostring(arg), 1)
     end
-    message = ""
-    for k in ipairs(...) do
-        message = message:gsub("%%" .. k, formatted_args[k])
-    end
+   
     local frame = GetChatFrameByName("error")
     frame:AddMessage("["..FuncName().."] " .. message)
 end
@@ -254,6 +249,8 @@ function BlessMeisterAddon:OnUnitSpellcastSent(unitCaster, target_name, castGUID
     --  target_name:    the NAME of the target
     --  castGUID:       unique ephemeral ID of the spellcast
     --  spellID:        unique identifier of the spell
+    self:debug("OnU "..unitCaster.." "..tostring(target_name).." "..tostring(castGUID).." "..tostring(spellID))
+    self:debug("OnUnitSpellcastSent: unitCaster=%s, target_name=%s, castGUID=%s, spellID=%d", unitCaster, target_name, castGUID, spellID)
 
     -- only consider my own spells
     if unitCaster ~= "player" then
@@ -280,6 +277,7 @@ function BlessMeisterAddon:OnUnitSpellcastSent(unitCaster, target_name, castGUID
     -- Is the spell in our spellmapping?
     local spell_handler = nil
     for pattern, handler in ipairs(self.spell_maps) do
+        self:debug("Matching spell %s against pattern %s", spellInfo.name, pattern)
         if spellInfo.name:find(pattern) then
             spell_handler = handler
             break
