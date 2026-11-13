@@ -193,6 +193,22 @@ function UnitName(unit)
     return nil, nil
 end
 
+function UnitBattlePetSpeciesID(unit)
+    return {
+        alpha = {
+            bravo = 123,
+            charlie = "hello there"
+        },
+        delta = {
+            epsilon = {
+                pi = 3.14
+            },
+            tau = 6.28
+        },
+        gamma = 12.23
+    }
+end
+
 -- Mocked WOW API function to create a frame
 function CreateFrame(frameType, name, parent, template)
     local frame = {

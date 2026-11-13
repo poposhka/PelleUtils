@@ -16,15 +16,17 @@ NEUTRUM     = 1
 MALE        = 2
 FEMALE      = 3
 
-function printInfo(info, depth)
+function printInfo(key, info, depth)
     result = ""
-    depth = depth or 2
+    depth = depth or 0
     if type(info) == "table" then
+        result = string.rep(" ", depth) .. key .. " = {\n"
         for k, v in pairs(info) do
-            result = result .. string.rep(" ", depth) .. tostring(k) .. " = " .. printInfo(v, depth + 2) .. "\n"
+            result = result .. printInfo(k, v, depth + 2)
         end
+        result = result .. string.rep(" ", depth) .. "}\n"
     else
-        result = tostring(info)
+        result = string.rep(" ", depth) .. key .. " = " .. tostring(info) .. "\n"
     end
     return result
 end
@@ -260,8 +262,8 @@ function UnitInfoQuery(unit)
             end)
 
             if success then
-                local info_str = printInfo(result)
-                print(func_name .. " = " .. info_str)
+                local info_str = printInfo(func_name, result)
+                io.write(info_str)
             end
         end
     end
