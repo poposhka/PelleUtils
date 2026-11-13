@@ -100,6 +100,8 @@ def main():
     
     lua.SetUnitState("target", "Mira")
 
+    executeLua(lua.lua, 'UnitInfoQuery("target")')
+    return
 
     print("Test sent to valid")
     lua.SimulateEvent("UNIT_SPELLCAST_SENT", "player", "Mira", "spell-guid-lol", 12345)

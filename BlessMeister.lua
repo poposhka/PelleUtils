@@ -390,10 +390,8 @@ function BlessMeisterAddon:handleVariable(variable)
     elseif variable == "class" then
         -- /run print(UnitClass("target"))
         local classinfo = UnitClass(self.current_target)
-        print("classinfo: ", classinfo, type(classinfo), #classinfo)
         classinfo = split(classinfo)
-        printTable(classinfo)
-        return GetClassInfo(classinfo[#classinfo]) or "Hero"
+        return GetClassInfo(tonumber(classinfo[#classinfo])) or "Hero"
 
     elseif variable == "title" then
         return "(({sibling} |){name}|{race}|{class})"
@@ -554,8 +552,8 @@ function BlessMeisterAddon:BuildTargetBlessing()
 
     -- pick a main phrase + pronoun
     local main, pronoun = RandomChoice({
-        {"{light}, {protection_active} (this {race}|our {sibling} {name}|this {class}|{name} the {class}).", "{3p_pronoun}"},
-        {"{title}, take (this|my|a) {blessing} of (the |our |){light}.", "{possessive_adjective}"},
+        {"{light}, {protection_active} (this {race}|our {sibling} {name}|this {class}|{name} the {class})", "{3p_pronoun}"},
+        {"{title}, take (this|my|a) {blessing} of (the |our |){light}", "{possessive_adjective}"},
         {"Let me {bless|benedict|pray for} you, {title}, for (glory|victory)", "{possessive_adjective}"}
     })
 
@@ -598,3 +596,4 @@ end
 
 -- initialize
 BlessMeisterAddon:init(addonName)
+

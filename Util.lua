@@ -16,6 +16,152 @@ NEUTRUM     = 1
 MALE        = 2
 FEMALE      = 3
 
+function printInfo(info, depth)
+    result = ""
+    depth = depth or 2
+    if type(info) == "table" then
+        for k, v in pairs(info) do
+            result = result .. string.rep(" ", depth) .. tostring(k) .. " = " .. printInfo(v, depth + 2) .. "\n"
+        end
+    else
+        result = tostring(info)
+    end
+    return result
+end
+
+function UnitInfoQuery(unit)
+    local result = nil
+
+    local funcs = {
+        "UnitAuraSlots",
+        "UnitBattlePetLevel",
+        "UnitBattlePetSpeciesID",
+        "UnitBattlePetType",
+        "UnitBuff",
+        "UnitCanAssist",
+        "UnitCanAttack",
+        "UnitCanCooperate",
+        "UnitCanPetBattle",
+        "UnitCastingDuration",
+        "UnitCastingInfo",
+        "UnitChannelDuration",
+        "UnitChannelInfo",
+        "UnitCharacterPoints",
+        "UnitChromieTimeID",
+        "UnitClass",
+        "UnitClassBase",
+        "UnitClassFromGUID",
+        "UnitClassification",
+        "UnitControllingVehicle",
+        "UnitCreatureFamily",
+        "UnitCreatureID",
+        "UnitCreatureType",
+        "UnitDamage",
+        "UnitDebuff",
+        "UnitDefense",
+        "UnitDefenseSkill",
+        "UnitDetailedThreatSituation",
+        "UnitDistanceSquared",
+        "UnitEffectiveLevel",
+        "UnitEmpoweredChannelDuration",
+        "UnitEmpoweredStageDurations",
+        "UnitEmpoweredStagePercentages",
+        "UnitExists",
+        "UnitFacing",
+        "UnitFactionGroup",
+        "UnitFullName",
+        "UnitGetAvailableRoles",
+        "UnitGetDetailedHealPrediction",
+        "UnitGetGuildXP",
+        "UnitGetIncomingHeals",
+        "UnitGetTotalAbsorbs",
+        "UnitGetTotalHealAbsorbs",
+        "UnitGroupRolesAssigned",
+        "UnitGroupRolesAssignedEnum",
+        "UnitGUID",
+        "UnitHasEffectivelyTankAura",
+        "UnitHasIncomingResurrection",
+        "UnitHasLFGDeserter",
+        "UnitHasLFGRandomCooldown",
+        "UnitHasLootInteraction",
+        "UnitHasMouseoverHighlight",
+        "UnitHasPowerType",
+        "UnitHasRelicSlot",
+        "UnitHasVehiclePlayerFrameUI",
+        "UnitHasVehicleUI",
+        "UnitHealth",
+        "UnitHealthMax",
+        "UnitHealthMissing",
+        "UnitHealthPercent",
+        "UnitHonor",
+        "UnitHonorLevel",
+        "UnitHonorMax",
+        "UnitHPPerStamina",
+        "UnitInAnyGroup",
+        "UnitInBattleground",
+        "UnitInOtherParty",
+        "UnitInParty",
+        "UnitInPartyIsAI",
+        "UnitInPartyShard",
+        "UnitInPhase",
+        "UnitInRaid",
+        "UnitInRange",
+        "UnitInSubgroup",
+        "UnitInVehicle",
+        "UnitInVehicleControlSeat",
+        "UnitInVehicleHidesPetFrame",
+        "UnitIsAFK",
+        "UnitIsBattlePet",
+        "UnitIsBattlePetCompanion",
+        "UnitIsBossMob",
+        "UnitIsCharmed",
+        "UnitIsCivilian",
+        "UnitIsConnected",
+        "UnitIsControlling",
+        "UnitIsCorpse",
+        "UnitIsDead",
+        "UnitIsDeadOrGhost",
+        "UnitIsDND",
+        "UninviteUnit",
+        "UnitAffectingCombat",
+        "UnitAlliedRaceInfo",
+        "UnitArmor",
+        "UnitAttackBothHands",
+        "UnitAttackPower",
+        "UnitAttackSpeed",
+        "UnitAura",
+        "UnitAuraBySlot",
+    }
+    local error_funcs = {}
+    for _,func_name in pairs(funcs) do
+        func = _G[func_name]
+        if func == nil then
+            table.insert(error_funcs, func_name .. " is not defined")
+        elseif type(func) ~= "function" then
+            table.insert(error_funcs, func_name .. " is not a function (" .. type(func) .. ")")
+        else
+            local result = nil
+            local success = true
+            xpcall(function()
+                result = func(unit)
+            end,
+            function(err)
+                table.insert(error_funcs, func_name .. " failed call: " .. err)
+                success = false
+            end)
+
+            if success then
+                local info_str = printInfo(result)
+                print(func_name .. " = " .. info_str)
+            end
+        end
+    end
+    print("-- errors --")
+    for k,v in pairs(error_funcs) do
+        print(v)
+    end
+end
+
 -- Helper to find chat frame by name
 function GetChatFrameByName(targetName)
     for i = 1, NUM_CHAT_WINDOWS do
@@ -59,6 +205,23 @@ function printTable(table)
     for key, value in pairs(table) do
         print(key, " = ", value)
     end
+end
+
+function join(tab, sep)
+    sep = sep or " "
+    if type(tab) ~= "table" then
+        return tostring(tab)
+    end
+
+    local result = ""
+    for _, i in pairs(tab) do
+        local val = tostring(i)
+        if result ~= "" then
+            result = result .. sep
+        end
+        result = result .. val
+    end
+    return result
 end
 
 -- Helper function to split a string

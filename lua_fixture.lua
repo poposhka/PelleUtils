@@ -10,13 +10,29 @@ local colors = {
     bold    = string.char(27).."[1m",
 }
 
+local CLASS_INFO = {
+    {"Warrior","WARRIOR", 1},
+    {"Paladin","PALADIN", 2},
+    {"Hunter","HUNTER", 3},
+    {"Rogue","ROGUE", 4},
+    {"Priest","PRIEST", 5},
+    {"Death Knight","DEATHKNIGHT", 6},
+    {"Shaman","SHAMAN", 7},
+    {"Mage","MAGE", 8},
+    {"Warlock","WARLOCK", 9},
+    {"Monk","MONK", 10},
+    {"Druid","DRUID", 11},
+    {"Demon Hunter","DEMONHUNTER", 12},
+    {"Evoker","EVOKER", 13}
+}
+
 local function colorize(color, text)
     return (colors[color] or "") .. tostring(text) .. colors.reset
 end
 
 SEX_UNKNOWN = 1
-SEX_FEMALE = 2
-SEX_MALE = 3
+SEX_FEMALE = 3
+SEX_MALE = 2
 
 -- collection of Wow API frames we mock
 mockFrames = {}
@@ -68,20 +84,18 @@ PelleUtilsDB = {
 SlashCmdList = {}
 
 -- Mocked globals
-_G = {
-    ["ChatFrame1"] = DEFAULT_CHAT_FRAME,
-    ["ChatFrame2"] = {
-        AddMessage = function(self, msg)
-            print(colors.red .. "[ChatFrame2] " .. colors.reset .. msg)
-        end,
-        name = "ERROR"
-    },
-    ["ChatFrame3"] = {
-        AddMessage = function(self, msg)
-            print(colors.blue .. "[ChatFrame3] " .. colors.reset .. msg)
-        end,
-        name = "DEBUG"
-    }
+ChatFrame1 = DEFAULT_CHAT_FRAME
+ChatFrame2 = {
+    AddMessage = function(self, msg)
+        print(colors.red .. "[ChatFrame2] " .. colors.reset .. msg)
+    end,
+    name = "ERROR"
+}
+ChatFrame3 = {
+    AddMessage = function(self, msg)
+        print(colors.blue .. "[ChatFrame3] " .. colors.reset .. msg)
+    end,
+    name = "DEBUG"
 }
 
 NUM_CHAT_WINDOWS = 3
@@ -211,6 +225,11 @@ function CreateFrame(frameType, name, parent, template)
     return frame
 end
 
+-- mocked false API
+function UnitAuraSlots(a, b)
+    b.c = 12
+end
+
 -- mocked API
 function UnitGUID(unit)
     if unit == "player" then
@@ -232,11 +251,12 @@ end
 
 -- Mocked WOW API function to send a chat message
 function SendChatMessage(message, channel)
-    message = tostring(message)
-    if channel == "EMOTE" then
-        message = "Player " .. message
+    local sentence = "Player"
+    if channel == "SAY" then
+        sentence = sentence .. " says:"
     end
-    DEFAULT_CHAT_FRAME:AddMessage( colors.yellow .. "[" .. channel .. "] " .. message .. colors.reset)
+    sentence = sentence .. " " .. tostring(message)
+    DEFAULT_CHAT_FRAME:AddMessage( colors.yellow .. sentence .. colors.reset)
 end
 
 -- Mocked WOW API function to check if unit exists
@@ -276,13 +296,26 @@ end
 function UnitClass(unit)
     local unit_state = UnitStates[unit]
     if unit_state then
-        return unit_state.class
+        for i, info in pairs(CLASS_INFO) do
+            if info[1] == unit_state.class then
+                return join(info)
+            end
+        end
     end
-    return nil
+    return nil, nil, nil
+end
+
+-- Helper to unpack on older lua
+function unpack(table_object)
+    return table.unpack(table_object)
 end
 
 function GetTime()
     return os.time()
+end
+
+function GetClassInfo(class_id)
+    return unpack((CLASS_INFO)[class_id] or {nil})
 end
 
 -- Keep the demo deterministic while respecting Lua's math.random ranges.
