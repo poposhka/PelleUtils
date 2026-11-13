@@ -340,6 +340,29 @@ function UnitInfoQuery(unit)
     end
 end
 
+-- helper to remove at and return element
+function removeAt(list, index)
+    local result = {}
+    local result_value = nil
+    for i, value in ipairs(list) do
+        if i ~= index then
+            table.insert(result, value)
+        else
+            result_value = value
+        end
+    end
+    return result, result_value
+end
+
+-- extend a table with another table working on ipairs
+function extend(list_a, list_b)
+    local result = list_a
+    for _, value in ipairs(list_b) do
+        table.insert(result, value)
+    end
+    return result
+end
+
 -- Helper to find chat frame by name
 function GetChatFrameByName(targetName)
     for i = 1, NUM_CHAT_WINDOWS do
@@ -494,8 +517,8 @@ function RandomChoice(list, nil_chance)
                 value = nil
             elseif type(entry[1]) == "number" then
                 -- this entry has a weight associated with it, the weight will be deleted
-                weight = math.abs(entry[1])
-                entry[1] = nil
+                entry, weight = removeAt(entry, 1)
+                weight = math.abs(weight)
             end
         end
 

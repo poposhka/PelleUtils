@@ -104,7 +104,7 @@ def main():
     lua.SimulateEvent("UNIT_SPELLCAST_SENT", "player", "Mira", "spell-guid-lol", 12345)
     executeLua(lua.lua, f'''SlashCmdList["PELLEUTILS"]("say")''')
     executeLua(lua.lua, f'''SlashCmdList["PELLEUTILS"]("say")''')
-    return 
+    
     print("Test self cast")
     lua.SimulateEvent("UNIT_SPELLCAST_SENT", "player", None, "spell-guid-lol", 12345)
     executeLua(lua.lua, f'''SlashCmdList["PELLEUTILS"]("say")''')

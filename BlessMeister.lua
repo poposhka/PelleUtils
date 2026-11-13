@@ -315,15 +315,22 @@ function BlessMeisterAddon:OnUnitSpellcastSent(unitCaster, target_name, castGUID
 
 end
 
-function BlessMeisterAddon:ClassChoice(choices, default)
-    local class = (UnitClass(self.current_target) or OTHER):lower()
+function BlessMeisterAddon:ClassChoice(target, choices, default)
+    local class = (UnitClass(target) or OTHER):lower()
     return choices[class] or default
 end
 
 function BlessMeisterAddon:handleVariable(variable)
 
+    local parameters = {}
+    if variable:find(":") then
+        parameters = split(variable, ":")
+        parameters, variable = removeAt(parameters, 1)
+    end
+
     if variable == "sibling" then
-        local gender = UnitSex(self.current_target)
+        local target = parameters[1] or self.current_target
+        local gender = UnitSex(target)
         if gender == FEMALE then
             return "sister"
         elseif gender == MALE then
@@ -332,8 +339,9 @@ function BlessMeisterAddon:handleVariable(variable)
             return "friend"
         end
 
-    elseif variable == "player_pronoun" then
-        local gender = UnitSex("player")
+    elseif variable == "pronoun" then
+        local target = parameters[1] or self.current_target
+        local gender = UnitSex(target)
         if gender == FEMALE then
             return "her"
         elseif gender == MALE then
@@ -342,8 +350,9 @@ function BlessMeisterAddon:handleVariable(variable)
             return "them"
         end
 
-    elseif variable == "player_possessive_pronoun" then
-        local gender = UnitSex("player")
+    elseif variable == "possessive_pronoun" then
+        local target = parameters[1] or self.current_target
+        local gender = UnitSex(target)
         if gender == FEMALE then
             return "her"
         elseif gender == MALE then
@@ -353,7 +362,8 @@ function BlessMeisterAddon:handleVariable(variable)
         end
 
     elseif variable == "3p_pronoun" then
-        local gender = UnitSex(self.current_target)
+        local target = parameters[1] or self.current_target
+        local gender = UnitSex(target)
         if gender == FEMALE then
             return "her"
         elseif gender == MALE then
@@ -363,7 +373,8 @@ function BlessMeisterAddon:handleVariable(variable)
         end
 
     elseif variable == "3p_pronoun_poss" then
-        local gender = UnitSex(self.current_target)
+        local target = parameters[1] or self.current_target
+        local gender = UnitSex(target)
         if gender == FEMALE then
             return "hers"
         elseif gender == MALE then
@@ -379,17 +390,19 @@ function BlessMeisterAddon:handleVariable(variable)
         return "(High King Magni|Muradin|Madoran|King Khardros|Modgud)"
 
     elseif variable == "name" then
-        return UnitName(self.current_target) or "friend"
+        local target = parameters[1] or self.current_target
+        return UnitName(target) or "friend"
 
     elseif variable == "race" then
-        return UnitRace(self.current_target) or "stranger"
+        local target = parameters[1] or self.current_target
+        return UnitRace(target) or "stranger"
 
     elseif variable == "protection_active" then
         return "(guide|bless|protect|guard|shield|watch over)"
 
     elseif variable == "class" then
-        -- /run print(UnitClass("target"))
-        local classinfo = UnitClass(self.current_target)
+        local target = parameters[1] or self.current_target
+        local classinfo = UnitClass(target)
         classinfo = split(classinfo)
         return GetClassInfo(tonumber(classinfo[#classinfo])) or "Hero"
 
@@ -410,7 +423,8 @@ function BlessMeisterAddon:handleVariable(variable)
         return "(bless|strengthen|bolster|lead)"
 
     elseif variable == "class_asset" then
-        return self:ClassChoice({
+        local target = parameters[1] or self.current_target
+        return self:ClassChoice(target, {
             [WARRIOR] = "(arm|fist|blade)",
             [PRIEST] = "soul",
             [PALADIN] = "heart",
@@ -423,7 +437,8 @@ function BlessMeisterAddon:handleVariable(variable)
         }, "courage")
 
     elseif variable == "class_attribute" then
-        return self:ClassChoice({
+        local target = parameters[1] or self.current_target
+        return self:ClassChoice(target, {
             [WARRIOR] = "(true|courageous|brave|strong|fierce|unyielding|honorable)",
             [PRIEST] = "(true|faithful|with the light)",
             [PALADIN] = "(true|courageous|brave|strong|fierce|unyielding|faithful|with the light)",
@@ -436,7 +451,8 @@ function BlessMeisterAddon:handleVariable(variable)
         }, "true")
 
     elseif variable == "class_weapon" then
-        return self:ClassChoice({
+        local target = parameters[1] or self.current_target
+        return self:ClassChoice(target, {
             [WARRIOR] = "(axe|sword|hammer)",
             [PRIEST] = "(faith|healing|heart)",
             [PALADIN] = "(courage|pure heart|hammer)",
@@ -505,11 +521,27 @@ end
 
 function BlessMeisterAddon:OnDwarfPaladinBlessing()
 
+    local targetted_emotes = {}
     if self.current_target == "player" then
         self:BuildSelfBlessing()
     else
         self:BuildTargetBlessing()
+        targetted_emotes = {
+            "(turns toward|reaches for) {name}",
+            "(stretches|reaches|gazes|lifts {possessive_pronoun:player} head) towards the (heavens|light|sky)",
+            "(chants|mumbles|says|whispers) a prayer[ under {possessive_pronoun:player} breath][ for {name}]",
+        }
     end
+
+    local emotes = extend(targetted_emotes, {
+        "seems (focused|deep|concentrated) in prayer",
+        "(stretches|reaches|gazes|lifts {possessive_pronoun:player} head) towards the (heavens|light|sky)",
+        "(chants|mumbles|says|whispers) a prayer[ under {possessive_pronoun:player} breath][ for {pronoun:player}self]",
+        "touches (the ground|his shield|{possessive_pronoun:player} heart|)",
+        "(focuses|closes) {possessive_pronoun:player} eyes"
+    })
+    local emote_string = RandomChoice(emotes, 0.5)
+    self.last_emote = capitalize(self:handleFragment(emote_string))
 
 end
 
@@ -517,36 +549,19 @@ function BlessMeisterAddon:BuildSelfBlessing()
     local self_blessing = ""
 
     local opener = RandomChoice({
-        "by [the light|the (ancestors ]forge|my [ancestors ]beard), ",
-        "by [dwarves and |earth and |mountain and |stone and ](steel|light|hearth), ",
+        "by (the light|the [ancestors ](forge|brew|mountain)|my [ancestors ][long ]beard),",
+        "by [dwarves and |earth and |mountain and |stone and ](steel|light|hearth),",
     }, 0.3)
 
     local quip = RandomChoice({
-        "may this {strengthen} me!",
+        "may this {strengthen} me[ in battle| against the sourge]!",
         "{strengthen} my (steel|hand|arm|shield|weapon), {light}!",
         "i must (hold fast|be strong|have courage|press on)!"
     })
 
-    if opener ~= nil then
-        self_blessing = self_blessing .. opener
-    end
-
-    if quip ~= nil then
-        self_blessing = self_blessing .. quip
-    end
-
+    self_blessing = concat(opener, quip, " ")
     self_blessing = capitalize(self:handleFragment(self_blessing))
 
-    local emote_quip = RandomChoice({
-        "seems (focused|deep|concentrated) in prayer",
-        "(stretches|reaches|gazes|lifts {player_possessive_pronoun} head) towards the (heavens|light|sky)",
-        "(chants|mumbles|says|whispers) a prayer[ under {player_possessive_pronoun} breath][ for {player_pronoun}self]",
-        "touches (the ground|his shield|his heart)",
-        "(focuses|closes) {player_possessive_pronoun} eyes"
-    }, 0.5)
-    emote_quip = capitalize(self:handleFragment(emote_quip))
-
-    self.last_emote = emote_quip
     self.last_sentence = self_blessing
 end
 
@@ -604,16 +619,6 @@ function BlessMeisterAddon:BuildTargetBlessing()
     -- tag on middle
     self.last_sentence = concat(result, middle, ". ") .. "!"
 
-
-    local emote_quip = RandomChoice({
-        "(shouts|reaches) towards {name}",
-        "seems (focused|deep|concentrated) in prayer",
-        "(stretches|reaches|gazes|lifts {player_possessive_pronoun} head) towards the (heavens|light|sky)",
-        "(chants|mumbles|says|whispers) a prayer[ under {player_possessive_pronoun} breath][ for {name}]",
-        "touches (the ground|his shield|his heart)",
-        "(focuses|closes) {player_possessive_pronoun} eyes"
-    }, 0.5)
-    self.last_emote = self:handleFragment(emote_quip)
 end
 
 -- initialize
