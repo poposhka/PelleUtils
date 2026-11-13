@@ -1,22 +1,10 @@
 
 
-a = {
-    name = "pelle",
-    handlers = {
-    }
-}
+a = {12321, "a", "b"}
 
-function a:bar()
-    print("in bar = ".. self.name)
+
+a[1] = nil
+
+for k, v in pairs(a) do
+    print(k, v)
 end
-
-function a:foo()
-
-    print(self.name)
-    self.handlers["bar"](self)
-end
-
-
--- a.handlers.bar = a.bar
-
-a:foo()

@@ -97,17 +97,22 @@ def main():
     lua = LuaFixture()
 
 
-    return
+    
     lua.SetUnitState("target", "Mira")
 
 
     print("Test sent to valid")
     lua.SimulateEvent("UNIT_SPELLCAST_SENT", "player", "Mira", "spell-guid-lol", 12345)
+    executeLua(lua.lua, f'''SlashCmdList["PELLEUTILS"]("say")''')
+    executeLua(lua.lua, f'''SlashCmdList["PELLEUTILS"]("say")''')
+    return 
+    print("Test self cast")
+    lua.SimulateEvent("UNIT_SPELLCAST_SENT", "player", None, "spell-guid-lol", 12345)
+    executeLua(lua.lua, f'''SlashCmdList["PELLEUTILS"]("say")''')
 
-    print("Test slash bad")
-    executeLua(lua.lua, f'''
-        SlashCmdList["PELLEUTILS"]("say")
-    ''')
+    print("Test unknown cast")
+    lua.SimulateEvent("UNIT_SPELLCAST_SENT", "player", None, "spell-guid-lol", 1)
+    executeLua(lua.lua, f'''SlashCmdList["PELLEUTILS"]("say")''')
 
     return
 

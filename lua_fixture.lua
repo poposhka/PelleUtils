@@ -299,8 +299,10 @@ end
 
 C_Spell = {
     GetSpellInfo = function(spellID)
-        return {
-            name = "Blessing of Protection"
-        }
+        return ({
+            ["12345"] = {
+                name = "Blessing of Protection"
+            }
+        })[tostring(spellID)]
     end
 }

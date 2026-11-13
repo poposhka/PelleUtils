@@ -17,7 +17,7 @@ function BlessMeisterAddon:init(addonName)
     }
     self.tabs = 0
     self.current_target = "target"
-    self.sentence_channel = "EMOTE"
+    self.last_emote = nil
     self.last_sentence = nil
     self.last_sentence_timeout = 0
     -- map pattern (string) -> sentence builder (function)
@@ -132,23 +132,13 @@ function BlessMeisterAddon:Print(message)
 end
 
 function BlessMeisterAddon:debug(message, ...)
-    -- force replace arguments with strings
-    for i = 1, select("#", ...) do
-        local arg = select(i, ...)
-        message = message:gsub("%%[^ ]+", tostring(arg), 1)
-    end
-   
+    message = strfmt(message, ...)
     local frame = GetChatFrameByName("debug")
     frame:AddMessage("["..FuncName().."] " .. message)
 end
 
 function BlessMeisterAddon:error(message, ...)
-    -- force replace arguments with strings
-    for i = 1, select("#", ...) do
-        local arg = select(i, ...)
-        message = message:gsub("%%[^ ]+?[sdfuli]", tostring(arg), 1)
-    end
-   
+    message = strfmt(message, ...)
     local frame = GetChatFrameByName("error")
     frame:AddMessage("["..FuncName().."] " .. message)
 end
@@ -196,22 +186,31 @@ function BlessMeisterAddon:HandleSlashCommand(msg)
     if command == "say" then
 
         -- if no sentence is created, we simply hold our piece
-        if self.last_sentence == nil then
-            self:debug("No sentence ready to say")
+        if self.last_sentence == nil and self.last_emote == nil then
+            self:debug("No sentence ready to say or emote")
             return
         end
 
         -- check if the timeout has expired, if so, don't speak
         local stale_time = GetTime() - self.last_sentence_timeout
         if stale_time > 0 then
-            self:debug("Sentence was %d sec stale: %s", stale_time, self.last_sentence)
+            self:debug("Sentence was %d sec stale: %s, %s", stale_time, self.last_sentence, self.last_emote)
             self.last_sentence = nil
+            self.last_emote = nil
             return
         end
 
         -- seems all conditions hold, speak up, then clear it
-        self:SendChatMessage(self.last_sentence, self.sentence_channel)
+        if self.last_emote then
+            self:SendChatMessage(self.last_emote, "EMOTE")
+        end
+
+        if self.last_sentence then
+            self:SendChatMessage(self.last_sentence, "SAY")
+        end
+
         self.last_sentence = nil
+        self.last_emote = nil
         return
     end
 
@@ -249,8 +248,7 @@ function BlessMeisterAddon:OnUnitSpellcastSent(unitCaster, target_name, castGUID
     --  target_name:    the NAME of the target
     --  castGUID:       unique ephemeral ID of the spellcast
     --  spellID:        unique identifier of the spell
-    self:debug("OnU "..unitCaster.." "..tostring(target_name).." "..tostring(castGUID).." "..tostring(spellID))
-    self:debug("OnUnitSpellcastSent: unitCaster=%s, target_name=%s, castGUID=%s, spellID=%d", unitCaster, target_name, castGUID, spellID)
+    self:debug("unitCaster=%s, target_name='%s', castGUID=%s, spellID=%d", unitCaster, target_name, castGUID, spellID)
 
     -- only consider my own spells
     if unitCaster ~= "player" then
@@ -259,12 +257,21 @@ function BlessMeisterAddon:OnUnitSpellcastSent(unitCaster, target_name, castGUID
 
     -- clear the last blessing
     self.last_sentence = nil
+    self.last_emote = nil
+    self.current_target = nil
 
-    -- can we resolve target?
-    local unitTarget = self:whichUnit(target_name)
-    if unitTarget == nil then
-        self:debug("Unable to resolve target name %s", target_name)
-        return
+    if target_name == nil then
+        -- this is a non-targetted spell which reflects back to the player
+        self:debug("target is nil, assuming self-target")
+        self.current_target = "player"
+        target_name = UnitName("player")
+    else
+        -- can we resolve target?
+        self.current_target = self:whichUnit(target_name)
+        if self.current_target == nil then
+            self:debug("Unable to resolve target name %s", target_name)
+            return
+        end
     end
 
     -- is this a real spell?
@@ -276,9 +283,10 @@ function BlessMeisterAddon:OnUnitSpellcastSent(unitCaster, target_name, castGUID
 
     -- Is the spell in our spellmapping?
     local spell_handler = nil
-    for pattern, handler in ipairs(self.spell_maps) do
-        self:debug("Matching spell %s against pattern %s", spellInfo.name, pattern)
-        if spellInfo.name:find(pattern) then
+    for pattern, handler in pairs(self.spell_maps) do
+        local matched = spellInfo.name:find(pattern)
+        self:debug("Check '%s' against pattern '%s': %s", spellInfo.name, pattern, matched ~= nil)
+        if matched ~= nil then
             spell_handler = handler
             break
         end
@@ -295,17 +303,14 @@ function BlessMeisterAddon:OnUnitSpellcastSent(unitCaster, target_name, castGUID
         return
     end
 
-
-    self.current_target = unitTarget
     self.current_spell_name = spellName
-    self:debug("Blessing triggered on '%s' (%s) with spell '%s'", UnitName(unit), unit, spellName)
+    self:debug("Blessing triggered on '%s' (%s) with spell '%s'", target_name, self.current_target, spellName)
 
 
     -- invoke the handler
     self:debug("Invoking handler '%s'", spell_handler)
-    local sentence = self.spell_maps[spell_handler](self)
+    spell_handler(self)
 
-    self.last_sentence = sentence
     self.last_sentence_timeout = GetTime() + 0.5
 
 end
@@ -369,6 +374,9 @@ function BlessMeisterAddon:handleVariable(variable)
 
     elseif variable == "possessive_adjective" then
         return "(your|thine)"
+
+    elseif variable == "dwarf_legends" then
+        return "(High King Magni|Muradin|Madoran|King Khardros|Modgud)"
 
     elseif variable == "name" then
         return UnitName(self.current_target) or "friend"
@@ -439,6 +447,9 @@ function BlessMeisterAddon:handleVariable(variable)
 end
 
 function BlessMeisterAddon:handleFragment(fragment, start, endchar)
+    if fragment == nil then
+        return nil
+    end
     self.tabs = self.tabs + 1
     start = start or 1
     endchar = endchar or nil
@@ -481,9 +492,9 @@ end
 function BlessMeisterAddon:OnDwarfPaladinBlessing()
 
     if self.current_target == "player" then
-        return self:BuildSelfBlessing()
+        self:BuildSelfBlessing()
     else
-        return self:BuildTargetBlessing()
+        self:BuildTargetBlessing()
     end
 
 end
@@ -491,11 +502,10 @@ end
 function BlessMeisterAddon:BuildSelfBlessing()
     local self_blessing = ""
 
-    self_blessing = RandomChoice({
+    local opener = RandomChoice({
         "by (the light|the (ancestors |)forge|my (ancestors |)beard), ",
         "by (dwarves and |earth and |mountain and |stone and |)(steel|light|hearth), ",
-        ""
-    })
+    }, 0.3)
 
     local quip = RandomChoice({
         "may this {strengthen} me!",
@@ -503,109 +513,82 @@ function BlessMeisterAddon:BuildSelfBlessing()
         "i must (hold fast|be strong|have courage|press on)!"
     })
 
-    self_blessing = self_blessing .. quip
+    if opener ~= nil then
+        self_blessing = self_blessing .. opener
+    end
+
+    if quip ~= nil then
+        self_blessing = self_blessing .. quip
+    end
 
     self_blessing = capitalize(self:handleFragment(self_blessing))
 
-    if self.sentence_channel == "EMOTE" then
-        local emote_quip = RandomChoice({
-            "seems (focused|deep|concentrated) in prayer",
-            "(stretches|reaches|gazes|lifts {player_possessive_pronoun} head) towards the (heavens|light|sky)",
-            "(chants|mumbles|says|whispers) a prayer( under {player_possessive_pronoun} breath|)( for {player_pronoun}self|)",
-            "touches (the ground|his shield|his heart)",
-            "(focuses|closes) {player_possessive_pronoun} eyes"
-        })
-        self_blessing = "*" .. capitalize(self:handleFragment(emote_quip)) .. "* " .. self_blessing
-    end
+    local emote_quip = RandomChoice({
+        "seems (focused|deep|concentrated) in prayer",
+        "(stretches|reaches|gazes|lifts {player_possessive_pronoun} head) towards the (heavens|light|sky)",
+        "(chants|mumbles|says|whispers) a prayer( under {player_possessive_pronoun} breath|)( for {player_pronoun}self|)",
+        "touches (the ground|his shield|his heart)",
+        "(focuses|closes) {player_possessive_pronoun} eyes"
+    }, 0.5)
+    emote_quip = capitalize(self:handleFragment(emote_quip))
 
-    return self_blessing
+    self.last_emote = emote_quip
+    self.last_sentence = self_blessing
 end
 
 function BlessMeisterAddon:BuildTargetBlessing()
 
 
-    -- quip : short, sometimes there, ends in !
-    -- intro : always there, ends in .
-    -- middle : encouragment sometimes. ends in ", and" if an ending exists
-    -- ending : sometimes. capitalized if no middle
-
-    local result = ""
+    -- [Quip.] Main. [Middle][,and ][End.]
 
     local quip = RandomChoice({
-        "By the (ancestors|forge|mountain|iron|steel)!",
-        "For (Khaz Modan|Bronzebeard|The Alliance)!",
-        "Not today, shadow!",
-        "", "", ""
+        "by the (ancestors|forge|mountain|iron|steel)!",
+        "for (Khaz Modan|Bronzebeard|The Alliance)!",
+        "by {dwarf_legends}('s (hammer|beard|shield)|)!"
+    }, 0.5)
+
+    -- pick a main phrase + pronoun
+    local main, pronoun = RandomChoice({
+        {"{light}, {protection_active} (this {race}|our {sibling} {name}|this {class}|{name} the {class}).", "{3p_pronoun}"},
+        {"{title}, take (this|my|a) {blessing} of (the |our |){light}.", "{possessive_adjective}"},
+        {"Let me {bless|benedict|pray for} you, {title}, for (glory|victory)", "{possessive_adjective}"}
     })
-
-    if quip ~= "" then
-        result = result .. capitalize(self:handleFragment(quip)) .. " "
-    end
-
-    -- Intro - the character bestows a blessing --
-    local intro = math.random(1,3)
-    pronoun = ""
-    if intro == 1 then
-        result = result .. capitalize(self:handleFragment("{light}, {protection_active} (this {race}|our {sibling} {name}|this {class}|{name} the {class})."))
-        pronoun = "{3p_pronoun}"
-    elseif intro == 2 then
-        result = result .. capitalize(self:handleFragment("{title}, take (this|my|a) {blessing} of (the |our |){light}."))
-        pronoun = "{possessive_adjective}"
-    else
-        result = result .. capitalize(self:handleFragment("Let me {bless|benedict|pray for} you, {title}, for (glory|victory)."))
-        pronoun = "{possessive_adjective}"
-    end
 
     -- pick a middle 0 is none
     local middle = RandomChoice({
         "(always |forever |)stand {class_attribute}(, {name}|)",
         "never (relent|surrender|lose faith|buckle|lose hope|give up|kneel|hesitate)(, {name}|)",
-        "(i|we|you must) (feel|trust|believe) the {light} in you(, {name}|)",
-        "", ""
-    })
+        "(i|we|you must) (feel|trust|believe) the {light} in you(, {name}|)"
+    }, 0.75)
 
     -- pick an ending
     local ending = RandomChoice({
         "(make it|let it|allow it to|to) (bolster|aid|guide|lead|help|strengthen) " .. pronoun .. " {class_asset} (to victory|in battle|against the Horde)",
         "(never stray from|have faith in|trust) the {light}",
         "may your {class_weapon} bring (death to|victory over|devastation to) (the horde|our enemies)",
-        "", "", "", ""
-    })
+    }, 0.6)
+
+    -- concat middle and end with ", and" if both appear
+    middle = concat(middle, ending, ", and ")
+    middle = capitalize(self:handleFragment(middle))
+
+    -- tag on quip and main
+    local result = capitalize(self:handleFragment(quip))
+    result = concat(result, capitalize(self:handleFragment(main)))
+
+    -- tag on middle
+    self.last_sentence = concat(result, middle) .. "!"
 
 
-    if middle ~= "" then
-        result = result .. " " .. capitalize(self:handleFragment(middle))
-    end
-
-    if middle ~= "" and ending ~= "" then
-        result = result .. ", and"
-    end
-
-    if ending ~= "" then
-        ending = self:handleFragment(ending)
-        if middle == "" then
-            ending = capitalize(ending)
-        end
-        result = result .. " " .. ending
-    end
-
-    if middle ~= "" or ending ~= "" then
-        result = result .. "!"
-    end
-
-    if self.sentence_channel == "EMOTE" then
-        local emote_quip = RandomChoice({
-            "(shouts|reaches) towards {name}",
-            "seems (focused|deep|concentrated) in prayer",
-            "(stretches|reaches|gazes|lifts {player_possessive_pronoun} head) towards the (heavens|light|sky)",
-            "(chants|mumbles|says|whispers) a prayer( under {player_possessive_pronoun} breath|)( for {name}|)",
-            "touches (the ground|his shield|his heart)",
-            "(focuses|closes) {player_possessive_pronoun} eyes"
-        })
-        result = "*" .. capitalize(self:handleFragment(emote_quip)) .. "* " .. result
-    end
-
-    return result
+    local emote_quip = RandomChoice({
+        "(shouts|reaches) towards {name}",
+        "seems (focused|deep|concentrated) in prayer",
+        "(stretches|reaches|gazes|lifts {player_possessive_pronoun} head) towards the (heavens|light|sky)",
+        "(chants|mumbles|says|whispers) a prayer( under {player_possessive_pronoun} breath|)( for {name}|)",
+        "touches (the ground|his shield|his heart)",
+        "(focuses|closes) {player_possessive_pronoun} eyes"
+    }, 0.5)
+    self.last_emote = self:handleFragment(emote_quip)
 end
 
 -- initialize

@@ -23,6 +23,17 @@ function GetChatFrameByName(targetName)
     return DEFAULT_CHAT_FRAME
 end
 
+-- Helper to format a string
+function strfmt(message, ...)
+    -- force replace arguments with strings
+    for i = 1, select("#", ...) do
+        local arg = select(i, ...)
+        message = message:gsub("%%[^ ]*[sdfuil]", tostring(arg), 1)
+    end
+    return message
+end
+
+-- Helper to get line in file
 function FileLine(text)
     return text:match("([^\\/:]+):(%d+):(.*)")
 end
@@ -54,9 +65,17 @@ function split(text, separator)
     return parts
 end
 
+function concat(front, back, sep)
+    if back == nil or back == "" then return front end
+    if front == nil or front == "" then return back end
+    sep = sep or " "
+    return front .. sep .. back
+end
+
 -- Helper function to capitalize the first letter in a string
 function capitalize(str)
-    if str == nil or str == "" then return "" end
+    if str == nil then return nil end
+    if str == "" then return "" end
     return string.upper(string.sub(str, 1, 1)) .. string.sub(str, 2)
 end
 
@@ -86,7 +105,13 @@ function MergeDefaults(defaults, saved)
 end
 
 -- Choose randomly from the items in the list or string
-function RandomChoice(list)
+function RandomChoice(list, nil_chance)
+
+    if nil_chance ~= nil then
+        if math.random() < nil_chance then
+            return nil
+        end
+    end
 
     if type(list) == "string" then
         local options = split(list, "|")
@@ -94,7 +119,7 @@ function RandomChoice(list)
     end
 
     if type(list) ~= "table" or #list == 0 then
-        return ""
+        return nil
     end
 
     local weightedChoices = {}
@@ -102,56 +127,45 @@ function RandomChoice(list)
 
     for _, entry in ipairs(list) do
         local weight = 1
-        local value = ""
+        local value = entry
 
-        if type(entry) == "string" then
-            value = entry
-        elseif type(entry) == "table" then
-            if type(entry.weight) == "number" then
-                weight = entry.weight
+        if type(entry) == "table" then
+            if #entry == 0 then
+                -- this is a table but a nil choice
+                value = nil
             elseif type(entry[1]) == "number" then
-                weight = entry[1]
-            end
-
-            if type(entry.text) == "string" then
-                value = entry.text
-            elseif type(entry.value) == "string" then
-                value = entry.value
-            elseif type(entry[2]) == "string" then
-                value = entry[2]
-            elseif type(entry[1]) == "string" then
-                value = entry[1]
+                -- this entry has a weight associated with it, the weight will be deleted
+                weight = math.abs(entry[1])
+                entry[1] = nil
             end
         end
 
-        if type(value) == "string" then
-            weight = tonumber(weight) or 1
-            if weight <= 0 then
-                weight = 1
-            end
+        totalWeight = totalWeight + weight
+        table.insert(weightedChoices, { weight = weight, value = value })
 
-            totalWeight = totalWeight + weight
-            table.insert(weightedChoices, { weight = weight, value = value })
-        end
     end
 
     if #weightedChoices == 0 then
-        return ""
+        return nil
     end
 
-    if totalWeight <= 0 then
-        return weightedChoices[math.random(1, #weightedChoices)].value
-    end
+
+    local result = weightedChoices[#weightedChoices].value
 
     local roll = math.random() * totalWeight
     local cursor = 0
-
     for _, choice in ipairs(weightedChoices) do
         cursor = cursor + choice.weight
         if roll <= cursor then
-            return choice.value
+            result = choice.value
+            break
         end
     end
 
-    return weightedChoices[#weightedChoices].value
+
+    if type(result) == "table" then
+        return table.unpack(result)
+    else
+        return result
+    end
 end
