@@ -316,7 +316,7 @@ function BlessMeisterAddon:OnUnitSpellcastSent(unitCaster, target_name, castGUID
 end
 
 function BlessMeisterAddon:ClassChoice(target, choices, default)
-    local class = (UnitClass(target) or OTHER):lower()
+    local class = (UnitClass(target) or OTHER):upper()
     return choices[class] or default
 end
 
