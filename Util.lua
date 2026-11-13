@@ -12,6 +12,10 @@ HUNTER      = "HUNTER"
 SHAMAN      = "SHAMAN"
 OTHER       = "OTHER"
 
+NEUTRUM     = 1
+MALE        = 2
+FEMALE      = 3
+
 -- Helper to find chat frame by name
 function GetChatFrameByName(targetName)
     for i = 1, NUM_CHAT_WINDOWS do
@@ -51,17 +55,31 @@ function FuncName()
     return file..":"..line..":"..func
 end
 
+function printTable(table)
+    for key, value in pairs(table) do
+        print(key, " = ", value)
+    end
+end
+
 -- Helper function to split a string
 function split(text, separator)
+    if type(text) == "table" then
+        -- already a table, return it as is
+        return text
+    end
     separator = separator or " "
     local parts = {}
-    -- Escape punctuation characters to treat them as literal characters
-    local pattern = "(.-)" .. separator:gsub("%p", "%%%0")
-
-    -- Append the separator to guarantee the trailing empty string is caught
-    for part in (text .. separator):gmatch(pattern) do
-        table.insert(parts, part)
+    local start = 1
+    while start < #text do
+        local _, endpos = text:find(separator, start, true)
+        if not endpos then
+            break
+        end
+        table.insert(parts, string.sub(text, start, endpos - 1))
+        start = endpos + 1
     end
+    table.insert(parts, string.sub(text, start, #text))
+
     return parts
 end
 
@@ -164,7 +182,7 @@ function RandomChoice(list, nil_chance)
 
 
     if type(result) == "table" then
-        return table.unpack(result)
+        return unpack(result)
     else
         return result
     end

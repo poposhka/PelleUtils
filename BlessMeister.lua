@@ -311,7 +311,7 @@ function BlessMeisterAddon:OnUnitSpellcastSent(unitCaster, target_name, castGUID
     self:debug("Invoking handler '%s'", spell_handler)
     spell_handler(self)
 
-    self.last_sentence_timeout = GetTime() + 0.5
+    self.last_sentence_timeout = GetTime() + 999
 
 end
 
@@ -324,9 +324,9 @@ function BlessMeisterAddon:handleVariable(variable)
 
     if variable == "sibling" then
         local gender = UnitSex(self.current_target)
-        if gender == 2 then
+        if gender == FEMALE then
             return "sister"
-        elseif gender == 3 then
+        elseif gender == MALE then
             return "brother"
         else
             return "friend"
@@ -334,9 +334,9 @@ function BlessMeisterAddon:handleVariable(variable)
 
     elseif variable == "player_pronoun" then
         local gender = UnitSex("player")
-        if gender == 2 then
+        if gender == FEMALE then
             return "her"
-        elseif gender == 3 then
+        elseif gender == MALE then
             return "him"
         else
             return "them"
@@ -344,9 +344,9 @@ function BlessMeisterAddon:handleVariable(variable)
 
     elseif variable == "player_possessive_pronoun" then
         local gender = UnitSex("player")
-        if gender == 2 then
+        if gender == FEMALE then
             return "her"
-        elseif gender == 3 then
+        elseif gender == MALE then
             return "his"
         else
             return "their"
@@ -354,9 +354,9 @@ function BlessMeisterAddon:handleVariable(variable)
 
     elseif variable == "3p_pronoun" then
         local gender = UnitSex(self.current_target)
-        if gender == 2 then
+        if gender == FEMALE then
             return "her"
-        elseif gender == 3 then
+        elseif gender == MALE then
             return "him"
         else
             return "them"
@@ -364,9 +364,9 @@ function BlessMeisterAddon:handleVariable(variable)
 
     elseif variable == "3p_pronoun_poss" then
         local gender = UnitSex(self.current_target)
-        if gender == 2 then
+        if gender == FEMALE then
             return "hers"
-        elseif gender == 3 then
+        elseif gender == MALE then
             return "his"
         else
             return "their"
@@ -388,7 +388,12 @@ function BlessMeisterAddon:handleVariable(variable)
         return "(guide|bless|protect|guard|shield|watch over)"
 
     elseif variable == "class" then
-        return UnitClass(self.current_target) or "Hero"
+        -- /run print(UnitClass("target"))
+        local classinfo = UnitClass(self.current_target)
+        print("classinfo: ", classinfo, type(classinfo), #classinfo)
+        classinfo = split(classinfo)
+        printTable(classinfo)
+        return GetClassInfo(classinfo[#classinfo]) or "Hero"
 
     elseif variable == "title" then
         return "(({sibling} |){name}|{race}|{class})"
