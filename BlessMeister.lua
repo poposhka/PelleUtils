@@ -394,14 +394,14 @@ function BlessMeisterAddon:handleVariable(variable)
         return GetClassInfo(tonumber(classinfo[#classinfo])) or "Hero"
 
     elseif variable == "title" then
-        return "(({sibling} |){name}|{race}|{class})"
+        return "([{sibling} ]{name}|{race}|{class})"
 
     elseif variable == "local_tavern" then
         local info = ZONE_INFO[GetZoneText()]
-        if info then return info.tavern else return "the tavern" end
+        if info ~= nil then return info.tavern else return "the tavern" end
 
     elseif variable == "light" then
-        return "(blessed |holy |sacred |eternal |glorious |)light"
+        return "[blessed |holy |sacred |eternal |glorious ]light"
 
     elseif variable == "blessing" then
         return "(boon|blessing|benediction|grace|gift|favor|grace|mercy)"
@@ -472,6 +472,13 @@ function BlessMeisterAddon:handleFragment(fragment, start, endchar)
             inner = RandomChoice(inner)
             result = result .. inner
             i = inner_end
+        elseif char == "[" then
+            -- Optiontext (choice|choice) is evaluated on options once
+            -- we advance i to the end of the subfragment
+            local inner, inner_end = self:handleFragment(fragment, i + 1, "]")
+            inner = RandomChoice(inner .. "|")
+            result = result .. inner
+            i = inner_end
         elseif char == "{" then
             -- evaluating a variable must be evaluated again as its contents may be formatting
             local inner, inner_end = self:handleFragment(fragment, i + 1, "}")
@@ -510,8 +517,8 @@ function BlessMeisterAddon:BuildSelfBlessing()
     local self_blessing = ""
 
     local opener = RandomChoice({
-        "by (the light|the (ancestors |)forge|my (ancestors |)beard), ",
-        "by (dwarves and |earth and |mountain and |stone and |)(steel|light|hearth), ",
+        "by [the light|the (ancestors ]forge|my [ancestors ]beard), ",
+        "by [dwarves and |earth and |mountain and |stone and ](steel|light|hearth), ",
     }, 0.3)
 
     local quip = RandomChoice({
@@ -533,7 +540,7 @@ function BlessMeisterAddon:BuildSelfBlessing()
     local emote_quip = RandomChoice({
         "seems (focused|deep|concentrated) in prayer",
         "(stretches|reaches|gazes|lifts {player_possessive_pronoun} head) towards the (heavens|light|sky)",
-        "(chants|mumbles|says|whispers) a prayer( under {player_possessive_pronoun} breath|)( for {player_pronoun}self|)",
+        "(chants|mumbles|says|whispers) a prayer[ under {player_possessive_pronoun} breath][ for {player_pronoun}self]",
         "touches (the ground|his shield|his heart)",
         "(focuses|closes) {player_possessive_pronoun} eyes"
     }, 0.5)
@@ -549,25 +556,30 @@ function BlessMeisterAddon:BuildTargetBlessing()
     -- [Quip.] Main. [Middle][,and ][End.]
 
     local quip = RandomChoice({
-        "(stone and steel|hammer and hearth|storm and sky|)!",
+        "(stone and steel|hammer and hearth|storm and sky)!",
         "(hear me|listen up), ye lot!",
         "by the (ancestors|forge|mountain|iron|steel)!",
         "for (the High Seat|Khaz Modan|Bronzebeard|The Alliance|Falstad's Gryphon)!",
-        "by {dwarf_legends}('s (hammer|beard|shield)|)!"
+        "by {dwarf_legends}['s (hammer|beard|shield)]!"
     }, 0.5)
 
     -- pick a main phrase + pronoun
     local main, pronoun = RandomChoice({
         {"{light}, {protection_active} (this {race}|our {sibling} {name}|this {class}|{name} the {class})", "{3p_pronoun}"},
-        {"{title}, take (this|my|a) {blessing} of (the |our |){light}", "{possessive_adjective}"},
+        {"{title}, take (this|my|a) {blessing} of [the |our ]{light}", "{possessive_adjective}"},
         {"Let me {bless|benedict|pray for} you, {title}, for (glory|victory)", "{possessive_adjective}"}
     })
 
     -- pick a middle 0 is none
     local middle = RandomChoice({
-        "(always |forever |)stand {class_attribute}(, {name}|)",
-        "never (relent|surrender|lose faith|buckle|lose hope|give up|kneel|hesitate)(, {name}|)",
-        "(i|we|you must) (can feel|trust|believe) the {light} in you(, {name}|)"
+        "give 'em no quarter",
+        "show 'em what {race}s are made of",
+        "stand yer ground",
+        "drive 'em back",
+        "make {dwarf_legends} proud",
+        "[always |forever ]stand {class_attribute}[, {name}]",
+        "never (relent|surrender|lose faith|buckle|lose hope|give up|kneel|hesitate|yield)[, {name}]",
+        "(i|we|you must) (can feel|trust|believe) the {light} in you[, {name}]"
     }, 0.75)
 
     -- pick an ending
@@ -576,8 +588,9 @@ function BlessMeisterAddon:BuildTargetBlessing()
         "(never stray from|have faith in|trust) the {light}",
         "may your {class_weapon} bring (death to|victory over|devastation to) (the horde|our enemies)",
         "keep yer feet on the ground",
-        "may yer tankard (always be full|never run dry|flow over)",
-        "the first round at {local_tavern} will be on me",
+        "may yer (tankard|mug|glass|cup) (always be full|never run dry|flow over)",
+        "the (roast hog|first round) at {local_tavern} will be on (you|me)",
+        "tonight we (feast|drink|celebrate)[ like kings] at ({local_tavern}|under the mountain)",
     }, 0.6)
 
     -- concat middle and end with ", and" if both appear
@@ -596,7 +609,7 @@ function BlessMeisterAddon:BuildTargetBlessing()
         "(shouts|reaches) towards {name}",
         "seems (focused|deep|concentrated) in prayer",
         "(stretches|reaches|gazes|lifts {player_possessive_pronoun} head) towards the (heavens|light|sky)",
-        "(chants|mumbles|says|whispers) a prayer( under {player_possessive_pronoun} breath|)( for {name}|)",
+        "(chants|mumbles|says|whispers) a prayer[ under {player_possessive_pronoun} breath][ for {name}]",
         "touches (the ground|his shield|his heart)",
         "(focuses|closes) {player_possessive_pronoun} eyes"
     }, 0.5)
