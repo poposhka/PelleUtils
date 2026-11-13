@@ -16,6 +16,73 @@ NEUTRUM     = 1
 MALE        = 2
 FEMALE      = 3
 
+
+ZONE_INFO = {
+    ["Dun Morogh"] = {
+        tavern = "Thunderbrew Distillery"
+    },
+    ["Elwynn Forest"] = {
+        tavern = "Lion's Pride Inn",
+    },
+    ["Westfall"] = {
+        tavern = "Sentinel Hill Inn"
+    },
+    ["Redridge Mountains"] = {
+        tavern = "Lakeshire Inn"
+    },
+    ["Duskwood"] = {
+        tavern = "Scarlet Raven Tavern"
+    },
+    ["Loch Modan"] = {
+        tavern = "Stoutlager Inn"
+    },
+    ["Wetlands"] = {
+        tavern = "Deepwater Tavern"
+    },
+    ["Arathi Highlands"] = {
+        tavern = "Refuge Pointe"
+    },
+    ["Hillsbrad Foothills"] = {
+        tavern = "Southshore Tavern"
+    },
+    ["The Hinterlands"] = {
+        tavern = "Wildhammer Inn"
+    },
+    ["Western Plaguelands"] = {
+        tavern = "Chillwind Camp"
+    },
+    ["Eastern Plaguelands"] = {
+        tavern = "Light's Hope Chapel"
+    },
+    ["Stranglethorn Vale"] = {
+        tavern = "Salty Sailor Tavern"
+    },
+    ["Teldrassil"] = {
+        tavern = "Dolanaar Inn"
+    },
+    ["Darkshore"] = {
+        tavern = "Auberdine Tavern"
+    },
+    ["Ashenvale"] = {
+        tavern = "Astranaar Inn"
+    },
+    ["Felwood"] = {
+        tavern = "Whisperwind Grove"
+    },
+    ["Moonglade"] = {
+        tavern = "Moonglade Tavern"
+    },
+    ["Silithus"] = {
+        tavern = " ... wait, can ye even get a drink here? ... "
+    },
+    ["The Barrens"] = {
+        tavern = "Broken Keel Tavern"
+    },
+    ["Tanaris"] = {
+        tavern = "Gadgetzan Inn"
+    },
+}
+
 function printInfo(key, info, depth)
     result = ""
     depth = depth or 0

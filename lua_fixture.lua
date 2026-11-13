@@ -50,8 +50,8 @@ function CreateUnit(name, sex, race, class, zone)
     }
 end
 
-CreateUnit("Bulbasaur", SEX_MALE, "Orc", "Dingus", "Netherworld")
-CreateUnit("Mira", SEX_FEMALE, "Human", "Paladin", "Stormwind")
+CreateUnit("Bulbasaur", SEX_MALE, "Orc", "Dingus", "Dun Morogh")
+CreateUnit("Mira", SEX_FEMALE, "Human", "Paladin", "Stormwind City")
 
 UnitStates = {
     player = GameUnits["Bulbasaur"],
@@ -193,6 +193,11 @@ function UnitName(unit)
     return nil, nil
 end
 
+function GetZoneText()
+    return UnitStates.player.zone
+end
+
+-- fake to see printout
 function UnitBattlePetSpeciesID(unit)
     return {
         alpha = {

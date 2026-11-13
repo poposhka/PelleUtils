@@ -373,7 +373,7 @@ function BlessMeisterAddon:handleVariable(variable)
         end
 
     elseif variable == "possessive_adjective" then
-        return "(your|thine)"
+        return "(your|yer)"
 
     elseif variable == "dwarf_legends" then
         return "(High King Magni|Muradin|Madoran|King Khardros|Modgud)"
@@ -395,6 +395,10 @@ function BlessMeisterAddon:handleVariable(variable)
 
     elseif variable == "title" then
         return "(({sibling} |){name}|{race}|{class})"
+
+    elseif variable == "local_tavern" then
+        local info = ZONE_INFO[GetZoneText()]
+        if info then return info.tavern else return "the tavern" end
 
     elseif variable == "light" then
         return "(blessed |holy |sacred |eternal |glorious |)light"
@@ -545,8 +549,10 @@ function BlessMeisterAddon:BuildTargetBlessing()
     -- [Quip.] Main. [Middle][,and ][End.]
 
     local quip = RandomChoice({
+        "(stone and steel|hammer and hearth|storm and sky|)!",
+        "(hear me|listen up), ye lot!",
         "by the (ancestors|forge|mountain|iron|steel)!",
-        "for (Khaz Modan|Bronzebeard|The Alliance)!",
+        "for (the High Seat|Khaz Modan|Bronzebeard|The Alliance|Falstad's Gryphon)!",
         "by {dwarf_legends}('s (hammer|beard|shield)|)!"
     }, 0.5)
 
@@ -561,7 +567,7 @@ function BlessMeisterAddon:BuildTargetBlessing()
     local middle = RandomChoice({
         "(always |forever |)stand {class_attribute}(, {name}|)",
         "never (relent|surrender|lose faith|buckle|lose hope|give up|kneel|hesitate)(, {name}|)",
-        "(i|we|you must) (feel|trust|believe) the {light} in you(, {name}|)"
+        "(i|we|you must) (can feel|trust|believe) the {light} in you(, {name}|)"
     }, 0.75)
 
     -- pick an ending
@@ -569,18 +575,21 @@ function BlessMeisterAddon:BuildTargetBlessing()
         "(make it|let it|allow it to|to) (bolster|aid|guide|lead|help|strengthen) " .. pronoun .. " {class_asset} (to victory|in battle|against the Horde)",
         "(never stray from|have faith in|trust) the {light}",
         "may your {class_weapon} bring (death to|victory over|devastation to) (the horde|our enemies)",
+        "keep yer feet on the ground",
+        "may yer tankard (always be full|never run dry|flow over)",
+        "the first round at {local_tavern} will be on me",
     }, 0.6)
 
     -- concat middle and end with ", and" if both appear
     middle = concat(middle, ending, ", and ")
     middle = capitalize(self:handleFragment(middle))
 
-    -- tag on quip and main
+    -- Assemble quip and main
     local result = capitalize(self:handleFragment(quip))
     result = concat(result, capitalize(self:handleFragment(main)))
 
     -- tag on middle
-    self.last_sentence = concat(result, middle) .. "!"
+    self.last_sentence = concat(result, middle, ". ") .. "!"
 
 
     local emote_quip = RandomChoice({
