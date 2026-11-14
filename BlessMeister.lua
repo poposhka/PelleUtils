@@ -10,6 +10,7 @@ function BlessMeisterAddon:init(addonName)
     self.Version = "0.1.0"
     self.Defaults = {
         enabled = true,
+        debug = false,
         bless_triggerchance = 0.5,
         message = "PelleUtils ready.",
         color = "|cff00ccff",
@@ -101,8 +102,6 @@ end
 
 function BlessMeisterAddon:OnEvent(event, ...)
 
-    self:debug(event)
-
     if event == "PLAYER_LOGIN" then
         self:OnPlayerLoginEvent(...)
 
@@ -123,6 +122,7 @@ function BlessMeisterAddon:OnPlayerLoginEvent(...)
     self.db = MergeDefaults(self.Defaults, PelleUtilsDB)
     self.db.message = self.db.message or self.Defaults.message
     self.db.enabled = self.db.enabled ~= false
+    self.db.debug = self.db.debug ~= false
     self.db.bless_triggerchance = self.db.bless_triggerchance or self.Defaults.bless_triggerchance
     self.db.color = self.db.color or self.Defaults.color
     self.db.showHelp = self.db.showHelp ~= false
@@ -218,6 +218,14 @@ function BlessMeisterAddon:HandleSlashCommand(msg)
         return
     end
 
+    if command == "debug" then
+        self.db.debug = not self.db.debug
+        self:Save()
+        self:Print("Deugging " .. (self.db.debug and "Enabled." or "Disabled."))
+        return
+    end
+    
+
     if command == "status" then
         self:Print("Status: " .. (self.db.enabled and "enabled" or "disabled"))
         return
@@ -277,6 +285,11 @@ function BlessMeisterAddon:OnUnitSpellcastSucceeded(unitCaster, castGUID, spellI
 end
 
 function BlessMeisterAddon:OnUnitSpellcastSent(unitCaster, target_name, castGUID, spellID)
+
+    if not self.db.enabled then
+        return
+    end
+
     -- OnUnitSpellcastSent
     --  If we detect a spell being sent by the player we will generate something to say that can be
     --  triggered by the `say` slash command. Since we don't know if the spell will be successful at this point
@@ -470,9 +483,9 @@ function BlessMeisterAddon:handleVariable(variable)
 
     elseif variable == "class" then
         -- this is tricky, NPCs have different class info
-        local classinfo = UnitClass(target)
-        classinfo = split(classinfo)
-        return GetClassInfo(tonumber(classinfo[#classinfo])) or "Hero"
+        _, _, class_index = UnitClass(target)
+        class_name = GetClassInfo(class_index) or "Hero"
+        return class_name
 
     elseif variable == "title" then
         return "([{sibling} ]{name}|{race}|{class})"

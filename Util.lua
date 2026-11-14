@@ -330,7 +330,7 @@ function UnitInfoQuery(unit)
 
             if success then
                 local info_str = printInfo(func_name, result)
-                io.write(info_str)
+                print(info_str)
             end
         end
     end
