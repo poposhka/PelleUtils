@@ -73,24 +73,34 @@ class LuaFixture:
             ''')
 
 def load_core(lua):
-    util_path = str(UTIL_PATH).replace('\\', '\\\\')
-    bless_path = str(BLESSMEISTER_PATH).replace('\\', '\\\\')
-    executeLua(lua,
-        f'''
+    code = f'''
+        -- Lua Simulated WOW entrypoint
         local addonName = "PelleUtils"
         local addon = {{}}
+        local chunk = nil
+    '''
 
-        local chunk = assert(loadfile("{util_path}"))
+    for line in open(ROOT / "PelleUtils.toc").readlines():
+        if "#" in line:
+            line = line[:line.find("#")]
+        line = line.strip()
+        if not line:
+            continue
+        file_path = str(ROOT / line).replace('\\', '\\\\')
+        code += f'''
+        chunk = assert(loadfile("{file_path}"))
         chunk(addonName, addon)
-
-        chunk = assert(loadfile("{bless_path}"))
-        chunk(addonName, addon)
-
-        for _, frame in ipairs(mockFrames) do
-            frame:SimulateFireEvent("PLAYER_LOGIN", "player", "Mira", "spell-guid-lol", 12345)
-        end
         '''
-    )
+
+    code += f'''
+        for _, frame in ipairs(mockFrames) do
+            frame:SimulateFireEvent("PLAYER_LOGIN", "player")
+        end
+    '''
+    # util_path = str(UTIL_PATH).replace('\\', '\\\\')
+    # bless_path = str(BLESSMEISTER_PATH).replace('\\', '\\\\')
+    print(code)
+    executeLua(lua, code)
 
 
 def main():

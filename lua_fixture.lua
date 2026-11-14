@@ -50,8 +50,8 @@ function CreateUnit(name, sex, race, class, zone)
     }
 end
 
-CreateUnit("Bulbasaur", SEX_MALE, "Orc", "Dingus", "Dun Morogh")
-CreateUnit("Mira", SEX_FEMALE, "Human", "Paladin", "Stormwind City")
+CreateUnit("Bulbasaur", SEX_MALE, "Dwarf", "Paladin", "Dun Morogh")
+CreateUnit("Mira", SEX_FEMALE, "Human", "Warlock", "Stormwind City")
 
 UnitStates = {
     player = GameUnits["Bulbasaur"],

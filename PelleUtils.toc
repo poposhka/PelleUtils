@@ -8,4 +8,4 @@
 
 Util.lua
 BlessMeister.lua
-Config.lua
+DwarfPaladin.lua

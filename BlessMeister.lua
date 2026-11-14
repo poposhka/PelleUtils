@@ -17,11 +17,14 @@ function BlessMeisterAddon:init(addonName)
     }
     self.tabs = 0
     self.current_target = "target"
+    self.current_spell_info = nil
     self.last_emote = nil
     self.last_sentence = nil
     self.last_sentence_timeout = 0
     -- map pattern (string) -> sentence builder (function)
     self.spell_maps = {}
+    self.player_race = nil
+    self.player_class = nil
 
 
     self.UNIT_TOKENS = {
@@ -41,6 +44,8 @@ function BlessMeisterAddon:init(addonName)
     self.spell_maps["Blessing of .+"] = self.OnDwarfPaladinBlessing
     self.spell_maps["Holy Light"] = self.OnDwarfPaladinBlessing
 
+    self.phrases = {}
+
     self.frame = CreateFrame("Frame")
     self.frame:RegisterEvent("PLAYER_LOGIN")
     self.frame:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
@@ -48,6 +53,37 @@ function BlessMeisterAddon:init(addonName)
     self.frame:SetScript("OnEvent", function(frame, ...)
         xpcall(function(...) self:OnEvent(...) end, self.Catch, ...)
     end)
+end
+
+function BlessMeisterAddon:RegisterLexicon(race, class, lexicon)
+    self:debug("Register lexicon for '%s' '%s'", race, class)
+    if self.phrases[race] == nil then
+        self.phrases[race] = {}
+    end
+    if self.phrases[race][class] == nil then
+        self.phrases[race][class] = {}
+    end
+
+    self.phrases[race][class] = lexicon
+end
+
+function BlessMeisterAddon:getLexicon()
+    if self.phrases == nil then
+        self:debug("No lexicons registered")
+        return {}
+    end
+
+    if self.phrases[self.player_race] == nil then
+        self:debug("No lexicon for race '%s'", self.player_race)
+        return {}
+    end
+
+    if self.phrases[self.player_race][self.player_class] == nil then
+        self:debug("No lexicon for race/class '%s/%s'", self.player_race, self.player_class)
+        return {}
+    end
+
+    return self.phrases[self.player_race][self.player_class]
 end
 
 -- STATIC function
@@ -91,6 +127,10 @@ function BlessMeisterAddon:OnPlayerLoginEvent(...)
     self.db.color = self.db.color or self.Defaults.color
     self.db.showHelp = self.db.showHelp ~= false
     PelleUtilsDB = self.db
+
+    self.player_race = UnitRace("player")
+    self.player_class = split(UnitClass("player"))[1]
+    self:debug("Player is a '%s' '%s'", self.player_race, self.player_class)
 
     self.short_slash = "/pu"
     SLASH_PELLEUTILS1 = self.short_slash
@@ -259,6 +299,7 @@ function BlessMeisterAddon:OnUnitSpellcastSent(unitCaster, target_name, castGUID
     self.last_sentence = nil
     self.last_emote = nil
     self.current_target = nil
+    self.current_spell_info = nil
 
     if target_name == nil then
         -- this is a non-targetted spell which reflects back to the player
@@ -303,13 +344,54 @@ function BlessMeisterAddon:OnUnitSpellcastSent(unitCaster, target_name, castGUID
         return
     end
 
-    self.current_spell_name = spellName
-    self:debug("Blessing triggered on '%s' (%s) with spell '%s'", target_name, self.current_target, spellName)
+    self.current_spell_info = spellInfo.name
+    self:debug("Blessing triggered on '%s' (%s) with spell '%s'", target_name, self.current_target, spellInfo.name)
 
 
     -- invoke the handler
     self:debug("Invoking handler '%s'", spell_handler)
     spell_handler(self)
+
+    local lexicon = self:getLexicon()
+    local best_match = nil
+    local best_match_length = 0
+    -- search the lexicon
+    for key, chapter in pairs(lexicon) do
+        -- search the matches in the chapter
+        for _,match in ipairs(chapter.matches) do
+            if spellInfo.name:match("^"..match) then
+                self:debug("match! " .. match .. " on " .. spellInfo.name)
+                if best_match_length < #match then
+                    best_match = chapter
+                    best_match_length = #match
+                end
+            end
+        end
+    end
+
+    if best_match == nil then
+        self:debug("Unable to match spell '%s'", spellInfo.name)
+    else
+        self:debug("Best match '%s', len %d", best_match.name, best_match_length)
+
+        local emote_string = RandomChoice(best_match.emotes, 0.3)
+        self.last_emote = self:handleFragment(emote_string)
+
+        local exclamation_string = RandomChoice(best_match.exclamations, 0.3)
+        exclamation_string = capitalize(self:handleFragment(exclamation_string))
+
+
+        local main_text = ""
+        if self.current_target == "player" then
+            main_text = RandomChoice(best_match.main_text_self or best_match.main_text)
+        else
+            main_text = self.last_sentence
+        end
+
+        main_text = capitalize(self:handleFragment(main_text))
+
+        self.last_sentence = concat(exclamation_string, main_text, "! ")
+    end
 
     self.last_sentence_timeout = GetTime() + 999
 
@@ -320,6 +402,45 @@ function BlessMeisterAddon:ClassChoice(target, choices, default)
     return choices[class] or default
 end
 
+GENDER_WORDS = {
+    sibling = {
+        [FEMALE] = "sister",
+        [MALE] = "brother",
+        [NEUTRUM] = "kin"
+    },
+    pronoun = {
+        [FEMALE] = "her",
+        [MALE] = "him",
+        [NEUTRUM] = "they"
+    },
+    third_pronoun = {
+        [FEMALE] = "her",
+        [MALE] = "him",
+        [NEUTRUM] = "them"
+    },
+    possessive_pronoun = {
+        [FEMALE] = "hers",
+        [MALE] = "his",
+        [NEUTRUM] = "theirs"
+    },
+    possessive_adjective = {
+        [FEMALE] = "her",
+        [MALE] = "his",
+        [NEUTRUM] = "their"
+    },
+    possessive_adjective_second = {
+        [FEMALE] = "your",
+        [MALE] = "your",
+        [NEUTRUM] = "your"
+    }
+}
+
+function getUnitGenderedWord(word, unit)
+    local sex = UnitSex(unit)
+    if GENDER_WORDS[word] == nil then return ":friend:" end
+    return GENDER_WORDS[word][sex] or "friend"
+end
+
 function BlessMeisterAddon:handleVariable(variable)
 
     local parameters = {}
@@ -328,80 +449,27 @@ function BlessMeisterAddon:handleVariable(variable)
         parameters, variable = removeAt(parameters, 1)
     end
 
-    if variable == "sibling" then
-        local target = parameters[1] or self.current_target
-        local gender = UnitSex(target)
-        if gender == FEMALE then
-            return "sister"
-        elseif gender == MALE then
-            return "brother"
-        else
-            return "friend"
-        end
+    local target = parameters[1] or self.current_target
 
-    elseif variable == "pronoun" then
-        local target = parameters[1] or self.current_target
-        local gender = UnitSex(target)
-        if gender == FEMALE then
-            return "her"
-        elseif gender == MALE then
-            return "him"
-        else
-            return "them"
-        end
+    self:debug("Variable '%s' target '%s'", variable, target)
 
-    elseif variable == "possessive_pronoun" then
-        local target = parameters[1] or self.current_target
-        local gender = UnitSex(target)
-        if gender == FEMALE then
-            return "her"
-        elseif gender == MALE then
-            return "his"
-        else
-            return "their"
-        end
-
-    elseif variable == "3p_pronoun" then
-        local target = parameters[1] or self.current_target
-        local gender = UnitSex(target)
-        if gender == FEMALE then
-            return "her"
-        elseif gender == MALE then
-            return "him"
-        else
-            return "them"
-        end
-
-    elseif variable == "3p_pronoun_poss" then
-        local target = parameters[1] or self.current_target
-        local gender = UnitSex(target)
-        if gender == FEMALE then
-            return "hers"
-        elseif gender == MALE then
-            return "his"
-        else
-            return "their"
-        end
-
-    elseif variable == "possessive_adjective" then
-        return "(your|yer)"
+    if GENDER_WORDS[variable] ~= nil then
+        return getUnitGenderedWord(variable, target)
 
     elseif variable == "dwarf_legends" then
         return "(High King Magni|Muradin|Madoran|King Khardros|Modgud)"
 
     elseif variable == "name" then
-        local target = parameters[1] or self.current_target
         return UnitName(target) or "friend"
 
     elseif variable == "race" then
-        local target = parameters[1] or self.current_target
         return UnitRace(target) or "stranger"
 
     elseif variable == "protection_active" then
         return "(guide|bless|protect|guard|shield|watch over)"
 
     elseif variable == "class" then
-        local target = parameters[1] or self.current_target
+        -- this is tricky, NPCs have different class info
         local classinfo = UnitClass(target)
         classinfo = split(classinfo)
         return GetClassInfo(tonumber(classinfo[#classinfo])) or "Hero"
@@ -423,7 +491,6 @@ function BlessMeisterAddon:handleVariable(variable)
         return "(bless|strengthen|bolster|lead)"
 
     elseif variable == "class_asset" then
-        local target = parameters[1] or self.current_target
         return self:ClassChoice(target, {
             [WARRIOR] = "(arm|fist|blade)",
             [PRIEST] = "soul",
@@ -437,7 +504,6 @@ function BlessMeisterAddon:handleVariable(variable)
         }, "courage")
 
     elseif variable == "class_attribute" then
-        local target = parameters[1] or self.current_target
         return self:ClassChoice(target, {
             [WARRIOR] = "(true|courageous|brave|strong|fierce|unyielding|honorable)",
             [PRIEST] = "(true|faithful|with the light)",
@@ -451,7 +517,6 @@ function BlessMeisterAddon:handleVariable(variable)
         }, "true")
 
     elseif variable == "class_weapon" then
-        local target = parameters[1] or self.current_target
         return self:ClassChoice(target, {
             [WARRIOR] = "(axe|sword|hammer)",
             [PRIEST] = "(faith|healing|heart)",
@@ -522,9 +587,7 @@ end
 function BlessMeisterAddon:OnDwarfPaladinBlessing()
 
     local targetted_emotes = {}
-    if self.current_target == "player" then
-        self:BuildSelfBlessing()
-    else
+    if self.current_target ~= "player" then
         self:BuildTargetBlessing()
         targetted_emotes = {
             "(turns toward|reaches for) {name}",
@@ -532,57 +595,21 @@ function BlessMeisterAddon:OnDwarfPaladinBlessing()
             "(chants|mumbles|says|whispers) a prayer[ under {possessive_pronoun:player} breath][ for {name}]",
         }
     end
-
-    local emotes = extend(targetted_emotes, {
-        "seems (focused|deep|concentrated) in prayer",
-        "(stretches|reaches|gazes|lifts {possessive_pronoun:player} head) towards the (heavens|light|sky)",
-        "(chants|mumbles|says|whispers) a prayer[ under {possessive_pronoun:player} breath][ for {pronoun:player}self]",
-        "touches (the ground|his shield|{possessive_pronoun:player} heart|)",
-        "(focuses|closes) {possessive_pronoun:player} eyes"
-    })
-    local emote_string = RandomChoice(emotes, 0.5)
-    self.last_emote = capitalize(self:handleFragment(emote_string))
-
 end
 
-function BlessMeisterAddon:BuildSelfBlessing()
-    local self_blessing = ""
 
-    local opener = RandomChoice({
-        "by (the light|the [ancestors ](forge|brew|mountain)|my [ancestors ][long ]beard),",
-        "by [dwarves and |earth and |mountain and |stone and ](steel|light|hearth),",
-    }, 0.3)
-
-    local quip = RandomChoice({
-        "may this {strengthen} me[ in battle| against the sourge]!",
-        "{strengthen} my (steel|hand|arm|shield|weapon), {light}!",
-        "i must (hold fast|be strong|have courage|press on)!"
-    })
-
-    self_blessing = concat(opener, quip, " ")
-    self_blessing = capitalize(self:handleFragment(self_blessing))
-
-    self.last_sentence = self_blessing
-end
 
 function BlessMeisterAddon:BuildTargetBlessing()
 
 
     -- [Quip.] Main. [Middle][,and ][End.]
 
-    local quip = RandomChoice({
-        "(stone and steel|hammer and hearth|storm and sky)!",
-        "(hear me|listen up), ye lot!",
-        "by the (ancestors|forge|mountain|iron|steel)!",
-        "for (the High Seat|Khaz Modan|Bronzebeard|The Alliance|Falstad's Gryphon)!",
-        "by {dwarf_legends}['s (hammer|beard|shield)]!"
-    }, 0.5)
 
     -- pick a main phrase + pronoun
     local main, pronoun = RandomChoice({
-        {"{light}, {protection_active} (this {race}|our {sibling} {name}|this {class}|{name} the {class})", "{3p_pronoun}"},
-        {"{title}, take (this|my|a) {blessing} of [the |our ]{light}", "{possessive_adjective}"},
-        {"Let me {bless|benedict|pray for} you, {title}, for (glory|victory)", "{possessive_adjective}"}
+        {"{light}, {protection_active} (this {race}|our {sibling} {name}|this {class}|{name} the {class})", "{third_pronoun}"},
+        {"{title}, take (this|my|a) {blessing} of [the |our ]{light}", "{possessive_adjective_second}"},
+        {"Let me {bless|benedict|pray for} you, {title}, for (glory|victory)", "{possessive_adjective_second}"}
     })
 
     -- pick a middle 0 is none
@@ -613,7 +640,7 @@ function BlessMeisterAddon:BuildTargetBlessing()
     middle = capitalize(self:handleFragment(middle))
 
     -- Assemble quip and main
-    local result = capitalize(self:handleFragment(quip))
+    local result = ""
     result = concat(result, capitalize(self:handleFragment(main)))
 
     -- tag on middle
