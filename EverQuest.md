@@ -54,3 +54,11 @@ Build a World of Warcraft Classic / Forever (`## Interface: 11503` / `16001`) ro
 
 ## 4. Next Step for Agent
 Scaffold the `.toc` file alongside `Crypto.lua`, `Parser.lua`, and a minimal `Runtime.lua` + `Authoring.lua` (`/gmstamp` + `/search`) so we can test stamping, compiling, and unlocking a salted clue in-game.
+
+
+## 5. User notes
+
+multi-component hashes to obfuscate quest steps.
+
+- the current step dictates how the next step is unlocked, e.g.
+    - location:time:

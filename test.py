@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 from pathlib import Path
+import argparse
 
 try:
     import lupa
@@ -10,30 +11,52 @@ except ImportError as exc:
 
 
 ROOT = Path(__file__).resolve().parent
-UTIL_PATH = ROOT / "Util.lua"
-BLESSMEISTER_PATH = ROOT / "BlessMeister.lua"
 
 def error(text : str):
     print("\033[31m" + text + "\033[0m")
 
-
-def executeLua(lua, code):
-    try:
-        lua.execute(code)
-    except BaseException as e:
-        error("==== UNHANDLED LUA EXCEPTION ===")
-        print(e)
-        error("================================")
-        exit()
-
 class LuaFixture:
-    def __init__(self) -> None:
+    def __init__(self, addon_path : str, fixture_path : str = None) -> None:
+        self.addon_path = Path(addon_path).resolve()
+        self.addon_name = self.addon_path.name
+        self.fixture_path = Path(fixture_path) if fixture_path else Path(addon_path) / "test_fixture.lua"
         self.LoadAddon()
 
     def LoadAddon(self):
         self.lua = lupa.LuaRuntime(unpack_returned_tuples=True)
-        executeLua(self.lua, open("lua_fixture.lua").read())
-        load_core(self.lua)
+        self.executeLua(open(self.fixture_path).read())
+        code = f'''
+            -- Lua Simulated WOW entrypoint
+            local addonName = "PelleUtils"
+            local addon = {{}}
+            local chunk = nil
+        '''
+        toc_path = self.addon_path / f"{self.addon_name}.toc"
+        print(f"Loading TOC at '{toc_path}'")
+        for line in open(toc_path).readlines():
+            if "#" in line:
+                line = line[:line.find("#")]
+            line = line.strip()
+            if not line:
+                continue
+            file_path = str(ROOT / line).replace('\\', '\\\\')
+            code += f'''
+            chunk = assert(loadfile("{file_path}"))
+            chunk(addonName, addon)
+            '''
+
+        # execute the initialization code based on files found
+        self.executeLua(code)
+        self.SimulateEvent("PLAYER_LOGIN", "player")
+
+    def executeLua(self, code : str):
+        try:
+            self.lua.execute(code)
+        except BaseException as e:
+            error("==== UNHANDLED LUA EXCEPTION ===")
+            print(e)
+            error("================================")
+            exit()
 
     def SetUnitState(self, unit : str, name : str):
         try:
@@ -44,67 +67,21 @@ class LuaFixture:
             error("================================")
             exit()
 
-
-    def SimulateEvent(self, event_name : str, *args):
-        argument_string = [f'"{event_name}"']
-        for arg in args:
-            if isinstance(arg, str):
-                argument_string += [f'"{arg}"']
-            else:
-                argument_string += [f'{arg}']
-
-        argument_string = ", ".join(argument_string)
-        print("Simulating Event: ", argument_string)
-
-        executeLua(self.lua,
-            f'''
-            for _, frame in ipairs(mockFrames) do
-                frame:SimulateFireEvent({argument_string})
-            end
-            ''')
+    def SimulateEvent(self, event_name : str, *args : list[str]):
+        try:
+            self.lua.globals().SimulateFireEvent(event_name, *args)
+        except BaseException as e:
+            error("==== UNHANDLED LUA EXCEPTION ===")
+            print(e)
+            error("================================")
+            exit()
 
     def randomBlessing(self):
-        #self.lua.globals().randomBlessing()
-        executeLua(self.lua,
-            f'''
-            for _, frame in ipairs(mockFrames) do
-                frame:SimulateFireEvent("UNIT_SPELLCAST_SUCCEEDED", "player", "spell-guid-lol", 12345, "cast-bar-id")
-            end
-            ''')
-
-def load_core(lua):
-    code = f'''
-        -- Lua Simulated WOW entrypoint
-        local addonName = "PelleUtils"
-        local addon = {{}}
-        local chunk = nil
-    '''
-
-    for line in open(ROOT / "PelleUtils.toc").readlines():
-        if "#" in line:
-            line = line[:line.find("#")]
-        line = line.strip()
-        if not line:
-            continue
-        file_path = str(ROOT / line).replace('\\', '\\\\')
-        code += f'''
-        chunk = assert(loadfile("{file_path}"))
-        chunk(addonName, addon)
-        '''
-
-    code += f'''
-        for _, frame in ipairs(mockFrames) do
-            frame:SimulateFireEvent("PLAYER_LOGIN", "player")
-        end
-    '''
-    # util_path = str(UTIL_PATH).replace('\\', '\\\\')
-    # bless_path = str(BLESSMEISTER_PATH).replace('\\', '\\\\')
-    print(code)
-    executeLua(lua, code)
+        self.SimulateEvent("UNIT_SPELLCAST_SUCCEEDED", "player", "spell-guid-lol", 12345, "cast-bar-id")
 
 
-def main():
-    lua = LuaFixture()
+def main(addon_path : str):
+    lua = LuaFixture(addon_path)
 
 
     lua.SetUnitState("target", "Mira")
@@ -112,16 +89,16 @@ def main():
 
     print("Test sent to valid")
     lua.SimulateEvent("UNIT_SPELLCAST_SENT", "player", "Mira", "spell-guid-lol", 12345)
-    executeLua(lua.lua, f'''SlashCmdList["PELLEUTILS"]("say")''')
-    executeLua(lua.lua, f'''SlashCmdList["PELLEUTILS"]("say")''')
-    
+    lua.executeLua(f'''SlashCmdList["PELLEUTILS"]("say")''')
+    lua.executeLua(f'''SlashCmdList["PELLEUTILS"]("say")''')
+
     print("Test self cast")
     lua.SimulateEvent("UNIT_SPELLCAST_SENT", "player", None, "spell-guid-lol", 12345)
-    executeLua(lua.lua, f'''SlashCmdList["PELLEUTILS"]("say")''')
+    lua.executeLua(f'''SlashCmdList["PELLEUTILS"]("say")''')
 
     print("Test unknown cast")
     lua.SimulateEvent("UNIT_SPELLCAST_SENT", "player", None, "spell-guid-lol", 1)
-    executeLua(lua.lua, f'''SlashCmdList["PELLEUTILS"]("say")''')
+    lua.executeLua(f'''SlashCmdList["PELLEUTILS"]("say")''')
 
     return
 
@@ -147,23 +124,27 @@ def main():
     lua.SimulateEvent("UNIT_SPELLCAST_SUCCEEDED", "player", "spell-guid-lolz", 12345, "cast-bar-id")
 
     print("Test triggerset")
-    executeLua(lua.lua, f'''
+    lua.executeLua( f'''
         SlashCmdList["PELLEUTILS"]("trigger")
     ''')
 
     print("Test triggerset")
-    executeLua(lua.lua, f'''
+    lua.executeLua( f'''
         SlashCmdList["PELLEUTILS"]("trigger 0.7")
     ''')
 
     print("Test slash")
-    executeLua(lua.lua, f'''
+    lua.executeLua( f'''
         SlashCmdList["PELLEUTILS"]("status")
     ''')
 
     print("Test slash bad")
-    executeLua(lua.lua, f'''
+    lua.executeLua( f'''
         SlashCmdList["PELLEUTILS"]("ngkjsdlbfg")
     ''')
+
 if __name__ == "__main__":
-    main()
+    ap = argparse.ArgumentParser()
+    ap.add_argument("addon_path", help="Path to folder where addon is installed")
+    args = ap.parse_args()
+    main(args.addon_path)

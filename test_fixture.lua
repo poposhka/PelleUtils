@@ -368,3 +368,11 @@ C_Spell = {
         })[tostring(spellID)]
     end
 }
+
+
+-- event simulator
+function SimulateFireEvent(eventName, ...)
+    for _, frame in ipairs(mockFrames) do
+        frame:SimulateFireEvent(eventName, ...)
+    end
+end

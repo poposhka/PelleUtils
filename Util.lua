@@ -551,3 +551,199 @@ function RandomChoice(list, nil_chance)
         return result
     end
 end
+
+PhraseBuilder = {
+    current_target = nil,
+    tabs = 0
+}
+
+function PhraseBuilder:ClassChoice(target, choices, default)
+    local class = (UnitClass(target) or OTHER):upper()
+    return choices[class] or default
+end
+
+GENDER_WORDS = {
+    sibling = {
+        [FEMALE] = "sister",
+        [MALE] = "brother",
+        [NEUTRUM] = "kin"
+    },
+    pronoun = {
+        [FEMALE] = "her",
+        [MALE] = "him",
+        [NEUTRUM] = "they"
+    },
+    third_pronoun = {
+        [FEMALE] = "her",
+        [MALE] = "him",
+        [NEUTRUM] = "them"
+    },
+    possessive_pronoun = {
+        [FEMALE] = "hers",
+        [MALE] = "his",
+        [NEUTRUM] = "theirs"
+    },
+    possessive_adjective = {
+        [FEMALE] = "her",
+        [MALE] = "his",
+        [NEUTRUM] = "their"
+    },
+    possessive_adjective_second = {
+        [FEMALE] = "your",
+        [MALE] = "your",
+        [NEUTRUM] = "your"
+    }
+}
+
+function getUnitGenderedWord(word, unit)
+    local sex = UnitSex(unit)
+    if GENDER_WORDS[word] == nil then return ":friend:" end
+    return GENDER_WORDS[word][sex] or "friend"
+end
+
+function PhraseBuilder:handleVariable(variable)
+
+    local parameters = {}
+    if variable:find(":") then
+        parameters = split(variable, ":")
+        parameters, variable = removeAt(parameters, 1)
+    end
+
+    local target = parameters[1] or self.current_target
+
+    if GENDER_WORDS[variable] ~= nil then
+        return getUnitGenderedWord(variable, target)
+
+    elseif variable == "dwarf_legends" then
+        return "(High King Magni|Muradin|Madoran|King Khardros|Modgud)"
+
+    elseif variable == "name" then
+        return UnitName(target) or "friend"
+
+    elseif variable == "race" then
+        return UnitRace(target) or "stranger"
+
+    elseif variable == "protection_active" then
+        return "(guide|bless|protect|guard|shield|watch over)"
+
+    elseif variable == "class" then
+        -- this is tricky, NPCs have different class info
+        _, _, class_index = UnitClass(target)
+        class_name = GetClassInfo(class_index) or "Hero"
+        return class_name
+
+    elseif variable == "title" then
+        return "([{sibling} ]{name}|{race}|{class})"
+
+    elseif variable == "local_tavern" then
+        local info = ZONE_INFO[GetZoneText()]
+        if info ~= nil then return info.tavern else return "the tavern" end
+
+    elseif variable == "light" then
+        return "[blessed |holy |sacred |eternal |glorious ]light"
+
+    elseif variable == "blessing" then
+        return "(boon|blessing|benediction|grace|gift|favor|grace|mercy)"
+
+    elseif variable == "strengthen" then
+        return "(bless|strengthen|bolster|lead)"
+
+    elseif variable == "class_asset" then
+        return self:ClassChoice(target, {
+            [WARRIOR] = "(arm|fist|blade)",
+            [PRIEST] = "soul",
+            [PALADIN] = "heart",
+            [ROGUE] = "senses",
+            [WARLOCK] = "ways",
+            [MAGE] = "mind",
+            [DRUID] = "spirit",
+            [HUNTER] = "step",
+            [SHAMAN] = "ancestors"
+        }, "courage")
+
+    elseif variable == "class_attribute" then
+        return self:ClassChoice(target, {
+            [WARRIOR] = "(true|courageous|brave|strong|fierce|unyielding|honorable)",
+            [PRIEST] = "(true|faithful|with the light)",
+            [PALADIN] = "(true|courageous|brave|strong|fierce|unyielding|faithful|with the light)",
+            [ROGUE] = "(cunning|fierce|deadly)",
+            [WARLOCK] = "(cunning|courageous)",
+            [MAGE] = "(brilliant|courageous)",
+            [DRUID] = "(true|resolute)",
+            [HUNTER] = "(swift|true|straight)",
+            [SHAMAN] = "(true|faithful|honorable)",
+        }, "true")
+
+    elseif variable == "class_weapon" then
+        return self:ClassChoice(target, {
+            [WARRIOR] = "(axe|sword|hammer)",
+            [PRIEST] = "(faith|healing|heart)",
+            [PALADIN] = "(courage|pure heart|hammer)",
+            [ROGUE] = "(blades|cunning ways|instincts)",
+            [WARLOCK] = "(magicks|unholy acts|connection to the nether)",
+            [MAGE] = "(brilliance|magicks|arcana|fire and frost)",
+            [DRUID] = "(connection to nature|strength of spirit|bond with nature)",
+            [HUNTER] = "(sharp arrows|bow and companion|instincts)",
+            [SHAMAN] = "(ancestors|ancestral bond|connection to the earth)",
+        }, "courage")
+
+    else
+        return variable
+    end
+end
+
+function PhraseBuilder:createPhrase(target, phrase)
+    self.current_target = target
+    self.tabs = 0
+    return self:handleFragment(phrase)
+end
+
+function PhraseBuilder:handleFragment(fragment, start, endchar)
+    if fragment == nil then
+        return nil
+    end
+    self.tabs = self.tabs + 1
+    start = start or 1
+    endchar = endchar or nil
+    endindex = #fragment
+    local result = ""
+    local i = start
+    while i <= #fragment do
+        local char = string.sub(fragment, i, i)
+        if char == "(" then
+            -- Optiontext (choice|choice) is evaluated on options once
+            -- we advance i to the end of the subfragment
+            local inner, inner_end = self:handleFragment(fragment, i + 1, ")")
+            inner = RandomChoice(inner)
+            result = result .. inner
+            i = inner_end
+        elseif char == "[" then
+            -- Optiontext (choice|choice) is evaluated on options once
+            -- we advance i to the end of the subfragment
+            local inner, inner_end = self:handleFragment(fragment, i + 1, "]")
+            inner = RandomChoice(inner .. "|")
+            result = result .. inner
+            i = inner_end
+        elseif char == "{" then
+            -- evaluating a variable must be evaluated again as its contents may be formatting
+            local inner, inner_end = self:handleFragment(fragment, i + 1, "}")
+            -- first select optional variable {foo|bar|baz}
+            inner = RandomChoice(inner)
+            -- now evaluated the chosen variable
+            inner = self:handleVariable(inner)
+            -- now, handle that as a unique fragment in case the variable yielded nested fragments
+            inner = self:handleFragment(inner)
+            -- finally it will have been recursively resolved
+            result = result .. inner
+            i = inner_end
+        elseif char == endchar then
+            self.tabs = self.tabs - 1
+            return result, i
+        else
+            result = result .. char
+        end
+        i = i + 1
+    end
+    self.tabs = self.tabs - 1
+    return result, endindex
+end
