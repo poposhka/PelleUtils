@@ -1,0 +1,10 @@
+## Interface: 16001
+## Title: EverQuest
+## Notes: A custom quest creator addon for World of Warcraft Forever.
+## Author: Per Franck
+## Version: 0.1.0
+## SavedVariablesPerCharacter: EverQuestDb
+## DefaultState: enabled
+
+../Util.lua
+EverQuest.lua
